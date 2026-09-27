@@ -322,6 +322,7 @@ struct FragOut {
 	s.clearcoatNormal = normalize( s.clearcoatNormal );
 	var r: FragResult;
 #if LIT
+	s.roughness = specularAntiAlias( s.normal, s.roughness );
 	r.color = vec4f( shadeSurface( s, in.P, in.V, in.pixel ), s.alpha );
 #else
 	r.color = vec4f( s.albedo + s.emissive, s.alpha );
@@ -344,9 +345,17 @@ struct FragOut {
 	// the fragment owns the motion of its pixel even when its colour is blended (AirMotes specks)
 	let a = VELOCITY_WEIGHT;
 #else
+#if VELOCITY_COVERAGE
+	// thin particles (spray, the rooster tail, the rocket flame): most of a pixel's colour under a
+	// faint one is what is behind it (the hull, the rider), so it keeps that motion; a particle claims
+	// the pixel's motion only as it becomes opaque (a coverage-weighted blend let faint, fast spray drag
+	// the hull's reprojection onto the water: a speckled, see-through hull under TAA)
+	let a = smoothstep( 0.4, 0.9, r.color.a ) * VELOCITY_WEIGHT;
+#else
 	let a = select( 1.0, r.color.a, TRANSPARENT_F ) * VELOCITY_WEIGHT;
 #endif
-	out.velocity = vec4f( r.velocity.xy * a, 0.0, a );
+#endif
+	out.velocity = vec4f( r.velocity.xy * a, r.velocity.z * a, a );
 #else
 	out.velocity = r.velocity;
 #endif

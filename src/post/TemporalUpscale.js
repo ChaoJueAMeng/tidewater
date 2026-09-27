@@ -55,6 +55,8 @@ function halton( index, base ) {
 
 }
 
+const CUT_DISTANCE = 20; // m moved in one frame that counts as a cut (a car at 300 km/h covers 1.4 m)
+
 export class TemporalUpscale {
 
 	static DEBUG_VIEWS = [ 'Off', 'Locks (green: holding, blue: new)', 'Luma instability (red)', 'Clamped (red) / kept (green)', 'New frame weight', 'Motion (px / frame)', 'Resampling blur (blue)', 'Still pixels kept (yellow)' ];
@@ -586,6 +588,13 @@ DEBUG_OUTPUT
 
 	}
 
+	// call after any camera jump the distance test cannot see (a cut to a nearby but different view)
+	reset() {
+
+		this._cut = true;
+
+	}
+
 	// record the resolve (after the beauty pass of this frame)
 	render() {
 
@@ -604,7 +613,20 @@ DEBUG_OUTPUT
 
 		}
 
-		// after a restart (resize, another AA mode) the history is ignored for a frame (FSR2 reset)
+		// camera cut (teleport, free-camera jump, respawn, or reset() below): the old history and its
+		// reprojection are meaningless, so restart as after a resize, with an identity reprojection
+		const cp = F.cameraPos.value, lc = this._lastCam;
+		if ( lc && Math.hypot( cp.x - lc[ 0 ], cp.y - lc[ 1 ], cp.z - lc[ 2 ] ) > CUT_DISTANCE ) this._cut = true;
+		this._lastCam = [ cp.x, cp.y, cp.z ];
+		if ( this._cut ) {
+
+			this._cut = false;
+			this._needsRestart = true;
+			U.prevInvViewProj.value.copy( F.invViewProj.value );
+
+		}
+
+		// after a restart (resize, another AA mode, a camera cut) the history is ignored for a frame (FSR2 reset)
 		U.reset.value = this._needsRestart ? 1 : 0;
 		this._needsRestart = false;
 
