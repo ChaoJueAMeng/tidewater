@@ -85,13 +85,13 @@ fn main( @builtin( global_invocation_id ) gid: vec3u ) {
 	let dens = ${ fbm( 'wuv', 4, 6 ) };
 
 	// holes of many sizes punched through the mat (worley, radius varied by noise)
-	let holeA = smoothstep( 0.28, 0.12, worley( wuv, 7.0 ) + ( ${ fbm( 'uv', 16, 3 ) } - 0.5 ) * 0.25 );
-	let holeB = smoothstep( 0.30, 0.16, worley( wuv + 0.17, 19.0 ) + ( ${ fbm( 'uv', 32, 2 ) } - 0.5 ) * 0.3 );
-	let holeC = smoothstep( 0.32, 0.18, worley( wuv + 0.61, 47.0 ) );
+	let holeA = (1.0 - smoothstep(0.12, 0.28, worley( wuv, 7.0 ) + ( ${ fbm( 'uv', 16, 3 ) } - 0.5 ) * 0.25 ));
+	let holeB = (1.0 - smoothstep(0.16, 0.30, worley( wuv + 0.17, 19.0 ) + ( ${ fbm( 'uv', 32, 2 ) } - 0.5 ) * 0.3 ));
+	let holeC = (1.0 - smoothstep(0.18, 0.32, worley( wuv + 0.61, 47.0 ) ));
 	let holes = clamp( holeA * 0.9 + holeB * 0.7 + holeC * 0.45, 0.0, 1.0 );
 
 	// fine bubbles: small bright dots
-	let bub = smoothstep( 0.24, 0.08, worley( uv + 0.33, 140.0 ) ) * 0.8 + smoothstep( 0.2, 0.05, worley( uv + 0.71, 260.0 ) ) * 0.5;
+	let bub = (1.0 - smoothstep(0.08, 0.24, worley( uv + 0.33, 140.0 ) )) * 0.8 + (1.0 - smoothstep(0.05, 0.2, worley( uv + 0.71, 260.0 ) )) * 0.5;
 
 	// streaks (drawn out by flow)
 	let suv = vec2f( uv.x * 1.0, uv.y * 1.0 ) + w1 * 2.0;

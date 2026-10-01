@@ -23,11 +23,12 @@ import { FFT_SIZE } from './OceanFFT.js';
 //   (seaDetailSample), surfFoam.module (surfFoamShading).
 export class WaterSurface {
 
-	constructor( { fft, cdlod, foamTexture } ) {
+	constructor( { fft, cdlod, foamTexture, lowTextureMode = false } ) {
 
 		this.fft = fft;
 		this.cdlod = cdlod;
 		this.foamTexture = foamTexture;
+		this.lowTextureMode = lowTextureMode;
 		this.shore = null; // ShoreWaves (optional)
 		this.wake = null; // WakeSim (optional)
 		this.terrain = null; // TerrainGPU (optional)
@@ -109,7 +110,8 @@ fn waterSurfaceCascadeAttenuation( c: i32, depth: f32 ) -> f32 {
 		const fft = this.fft;
 		const C = fft.cascades;
 		const T = !! this.terrain, SH = !! this.shore, WK = !! this.wake, DT = !! this.detail;
-		const SF = this.surfFoam;
+		const LOW = this.lowTextureMode;
+		const SF = LOW ? null : this.surfFoam;
 		const SIM = !! this.shoreSim;
 		const cd = this.cdlod.module.name;
 		const CdV = cd[ 0 ].toUpperCase() + cd.slice( 1 ) + 'Vertex';
@@ -140,7 +142,7 @@ fn waterSurfaceCascadeAttenuation( c: i32, depth: f32 ) -> f32 {
 		}
 
 		const vertex = /* wgsl */`
-const WATER_SHORE_DEEP: f32 = 26.0; // m: ShoreWaves' envelope smoothstep( 26, 13, depth ) is 0 beyond
+const WATER_SHORE_DEEP: f32 = 26.0; // m: ShoreWaves' envelope (1.0 - smoothstep(13, 26, depth )) is 0 beyond
 
 struct WaterSurfaceVertex {
 	position: vec3f,
@@ -202,7 +204,7 @@ ${ SH ? /* wgsl */`
 		let k = 0.04;
 		// no run-up sheet on steep rock (cliffs, sea stacks): waves break against it instead
 		let nr = ${ T ? 'terrainNormalRockLevel( worldXZ, 0.0 )' : 'vec4f( 0.0 )' };
-		let gentle = ${ T ? 'smoothstep( 0.45, 0.25, length( nr.xy ) )' : '1.0' };
+		let gentle = ${ T ? '(1.0 - smoothstep(0.25, 0.45, length( nr.xy ) ))' : '1.0' };
 		let hmx = sat( ( swashLevel - y ) / k * 0.5 + 0.5 ) * gentle;
 		let smax = mix( y, swashLevel, hmx ) + hmx * ( 1.0 - hmx ) * k;
 		swash = smoothstep( -0.02, 0.03, swashLevel - y );
@@ -294,7 +296,7 @@ ${ cascadesF }
 	// the finest cascade's texel (~3 cm), so the surface looks glassy. Re-sample that cascade at
 	// ~1 m and ~2.3 m tiles (rotated, so they never line up with it) wherever the footprint is
 	// small. Damped in slicks with the short wind waves. Explicit LOD: this runs in a branch.
-	let near = smoothstep( 0.04, 0.01, footprint ) * rough;
+	let near = (1.0 - smoothstep(0.01, 0.04, footprint )) * rough;
 	if ( near > 0.002 ) {
 		let c1 = textureSampleLevel( oceanDerivatives, smpLinearRepeat, ${ rot( 'lagXZ', 0.63 ) } * ${ f( k1 / Lf ) }, ${ cN }, max( log2( footprint / ${ f( texel1 ) } ), 0.0 ) );
 		let c2 = textureSampleLevel( oceanDerivatives, smpLinearRepeat, ${ rot( 'lagXZ', 2.14 ) } * ${ f( k2 / Lf ) }, ${ cN }, max( log2( footprint / ${ f( texel2 ) } ), 0.0 ) );
@@ -345,6 +347,10 @@ ${ SH ? /* wgsl */`
 ${ DT ? '	whitecaps = whitecaps * mix( 0.5, 1.5, det.gust ) + det.streak * 0.5;' : '' }
 	let coverage = sat( ( foamSum + whitecaps ) * waterSurface.foamCoverage );
 
+${ LOW ? /* wgsl */`
+	// 16-texture fallback: retain coverage but omit the foam/lace texture pair.
+	let bubbles = 0.8;
+	var foam = coverage * 0.85;` : /* wgsl */`
 	// foam pattern: an irregular bubbly mat thresholded by coverage, so foam grows, tears into
 	// lace and dissolves naturally
 	let fuv = lagXZ * waterSurface.foamScale;
@@ -358,13 +364,14 @@ ${ DT ? '	whitecaps = whitecaps * mix( 0.5, 1.5, det.gust ) + det.streak * 0.5;'
 	let detail = smoothstep( thresh - soft, thresh + soft, pattern ) * ( p1.y * 0.25 + 0.8 );
 	// at distance the pattern averages out -> use coverage directly
 	let far = smoothstep( 0.15, 1.2, footprint );
-	var foam = mix( detail, coverage * 0.85, far );
+	let bubbles = p1.y;
+	var foam = mix( detail, coverage * 0.85, far );` }
 
 	var o: WaterSurfaceFrag;
 ${ SF ? /* wgsl */`
 	// foam look (surf zone whitewater / lace, see SurfFoam)
 	var fa: SurfFoamArgs;
-	fa.coverage = coverage; fa.foam = foam; fa.footprint = footprint; fa.depth = depth; fa.bubbles = p1.y;
+	fa.coverage = coverage; fa.foam = foam; fa.footprint = footprint; fa.depth = depth; fa.bubbles = bubbles;
 	fa.lagXZ = lagXZ; fa.normal = normal; fa.baseNormal = baseNormal;
 	fa.fresh = ${ SH ? 'shoreFoam' : '0.0' }; fa.sim = simFoam; fa.simState = simState; fa.roller = ${ SH ? 'surfMask.y' : '0.0' }; fa.P = P;
 	o.foamInfo = surfFoamShading( fa );
@@ -389,7 +396,7 @@ ${ SF ? /* wgsl */`
 				WK && this.wake.module, DT && this.detail.module, SF && SF.module ],
 			uniforms: this.params,
 			uniformName: 'waterSurface',
-			bindings: { waterFoamTex: { texture: this.foamTexture } },
+			bindings: LOW ? {} : { waterFoamTex: { texture: this.foamTexture } },
 			code: vertex + fragment,
 		} );
 

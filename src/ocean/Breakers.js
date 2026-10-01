@@ -123,7 +123,7 @@ fn breakersSprayShadow( p: vec3f, seedTag: f32 ) -> f32 {
 			let tau = s / - Ld;
 			let yRay = p.y + L.y * tau; // height of the ray toward the sun where it crosses the plane
 			let top = root.y + 0.05;
-			let shade = smoothstep( top, top - 0.4, yRay ) * smoothstep( -0.1, 0.1, s ) * smoothstep( 14.0, 6.0, s );
+			let shade = smoothstep( top, top - 0.4, yRay ) * smoothstep( -0.1, 0.1, s ) * (1.0 - smoothstep(6.0, 14.0, s ));
 			out = 1.0 - shade * 0.55;
 		}
 	}
@@ -256,7 +256,7 @@ fn breakersProcessCrest( i: u32, pc: vec2f, m: f32 ) {
 	let A = shoreWaveAmp( m, along );
 	let cr = shoreCrest( A, depth ); // ( b, H, trough, lipThrow )
 	let b = cr.x;
-	let env = smoothstep( 26.0, 13.0, depth ) * sat( ph.exposure * 1.4 ) * shoreP.enabled;
+	let env = (1.0 - smoothstep(13.0, 26.0, depth )) * sat( ph.exposure * 1.4 ) * shoreP.enabled;
 
 	// followed from before it breaks until the bore reaches the shore (the lip sheet only uses b < 1.25)
 	if ( b > -0.6 && env > 0.3 && depth > 0.12 ) {
@@ -400,7 +400,7 @@ fn breakersCount( rate: f32, gain: f32, seed: u32, salt: u32 ) -> u32 {
 }
 
 fn breakersEmit( i: u32, slot: u32, root: vec3f, dir: vec2f, b: f32, H: f32, trough: f32, c: f32, m: f32, depth: f32, bore: vec4f ) {
-	let camFade = smoothstep( breakersP.emitRange, breakersP.emitRange * 0.35, length( root - breakersP.cameraPos ) );
+	let camFade = (1.0 - smoothstep(breakersP.emitRange * 0.35, breakersP.emitRange, length(root - breakersP.cameraPos)));
 	let gain = breakersP.spray * camFade * frame.dt;
 	// the many sub-pixel drops and ligaments take the ring budget; the few, visible spray and mist
 	// sprites always get their full rate
@@ -433,7 +433,7 @@ fn breakersEmit( i: u32, slot: u32, root: vec3f, dir: vec2f, b: f32, H: f32, tro
 	let haze = smoothstep( 0.9, 1.0, b ) * ( 1.0 - smoothstep( 1.2, 1.5, b ) );
 	let spit = smoothstep( 0.98, 1.08, b ) * ( 1.0 - smoothstep( 1.15, 1.3, b ) );
 	let roller = smoothstep( 1.05, 1.3, b ) * smoothstep( 0.06, 0.25, Hb );
-	let clash = roller * smoothstep( 0.1, 0.2, depth ) * smoothstep( 0.7, 0.35, depth );
+	let clash = roller * smoothstep( 0.1, 0.2, depth ) * (1.0 - smoothstep(0.35, 0.7, depth ));
 	let drift = smoothstep( 9.0, 15.0, offshore ) * smoothstep( -0.4, 0.1, b ) * ( 1.0 - smoothstep( 0.75, 0.9, b ) );
 
 	// ---- drops and ligaments (ballistic)

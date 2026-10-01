@@ -82,6 +82,7 @@ export class Material {
 		// per-material lighting switches (see SceneLighting hooks)
 		this.underwaterLighting = o.underwaterLighting || 'full';
 		this.appliesHillShadow = !! o.appliesHillShadow;
+		this.noEnv = !! o.noEnv; // skip env-specular hook cube (rough dielectrics lose ~nothing)
 		this.localLightsCheap = !! o.localLightsCheap;
 		this.receiveShadows = o.receiveShadows ?? true;
 		this.userData = o.userData || {};
@@ -161,7 +162,7 @@ export class Material {
 	// the state that selects a pipeline (besides geometry layout and pass)
 	pipelineKey() {
 
-		return `${ this.id }.${ this.version }.${ this.side }.${ this.transparent }.${ typeof this.blending === 'string' ? this.blending : JSON.stringify( this.blending ) }.${ this.depthWrite }.${ this.depthTest }.${ this.depthCompare }.${ this.colorWrite }.${ this.topology }.${ this.alphaTest > 0 }.${ this.underwaterLighting }.${ this.appliesHillShadow }.${ this.localLightsCheap }.${ this.receiveShadows }.${ this.depthBias }.${ this.depthBiasSlopeScale }.${ this.vertexColors }`;
+		return `${ this.id }.${ this.version }.${ this.side }.${ this.transparent }.${ typeof this.blending === 'string' ? this.blending : JSON.stringify( this.blending ) }.${ this.depthWrite }.${ this.depthTest }.${ this.depthCompare }.${ this.colorWrite }.${ this.topology }.${ this.alphaTest > 0 }.${ this.underwaterLighting }.${ this.appliesHillShadow }.${ this.localLightsCheap }.${ this.receiveShadows }.${ this.noEnv }.${ this.depthBias }.${ this.depthBiasSlopeScale }.${ this.vertexColors }`;
 
 	}
 

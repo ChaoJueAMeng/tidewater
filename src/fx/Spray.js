@@ -630,7 +630,7 @@ ${ deposit ? /* wgsl */`				// fell into the water (not onto the sand): its bubb
 	let fadeOut = 1.0 - smoothstep( ${ byKind( 'kind', KIND.fadeOut ) }, 1.0, t );
 	let baseA = ${ byKind( 'kind', KIND.alpha ) };
 	// far: fade out; very near the eye: sheets and mist would fill the screen (and cost a lot of overdraw)
-	let distFade = smoothstep( mat.maxDistance, mat.maxDistance * 0.55, dist ) * select( smoothstep( 0.6, 3.0, dist ), 1.0, water );
+	let distFade = (1.0 - smoothstep(mat.maxDistance * 0.55, mat.maxDistance, dist)) * select(smoothstep(0.6, 3.0, dist), 1.0, water);
 	let a = baseA * fadeIn * fadeOut * cover * distFade * mat.intensity;
 
 	o.vUV = corner;
@@ -669,7 +669,7 @@ ${ deposit ? /* wgsl */`				// fell into the water (not onto the sand): its bubb
 	// a torn sheet only a few pixels across can't show its tears: a solid white dot, and a cluster of
 	// them reads as cauliflower puffs. Small on screen, it is drawn thinner and more torn: a far
 	// splash-up is a ragged, see-through burst
-	let farK = smoothstep( 14.0, 3.0, in.vs.vFwd.w ) * select( 0.0, 1.0, isSheet && ! isClear );
+	let farK = (1.0 - smoothstep(3.0, 14.0, in.vs.vFwd.w )) * select( 0.0, 1.0, isSheet && ! isClear );
 	let erode = mix( 0.26, 0.7, t ) + farK * 0.16;
 	let dens = sat( ( field - erode ) * 3.0 );
 	// torn edges are thin, translucent water: soft and see-through, the core dense white

@@ -1,5 +1,6 @@
 import { Mesh, Vector2, Vector3 } from '../engine/index.js';
 import { ShaderModule } from '../engine/gpu/Shader.js';
+import { GPU } from '../engine/gpu/GPU.js';
 import { CDLOD } from '../core/CDLOD.js';
 import { standard } from '../materials/Materials.js';
 import { G } from '../engine/render/Frame.js';
@@ -59,6 +60,8 @@ export class Terrain {
 		const mat = this.material = standard( {
 			name: 'Terrain',
 			roughness: 0.9, metalness: 0,
+			// The rough base has little specular response, but wet sand does: only drop the cube at 16 textures.
+			noEnv: ( GPU.limits?.maxSampledTexturesPerShaderStage ?? Infinity ) <= 16,
 			uniforms: {
 				viewPos: [ 'vec3f', this.uViewPos.value ],
 				wetDarken: [ 'f32', 0.58 ],
@@ -157,7 +160,7 @@ fn terWetFoam( xz: vec2f, h: f32 ) -> vec2f {
 #if HAS_WETNESS
 	return terrainWetness( xz, h );
 #else
-	return vec2f( smoothstep( 0.5, 0.0, h ), 0.0 );
+	return vec2f( (1.0 - smoothstep(0.0, 0.5, h )), 0.0 );
 #endif
 }
 
@@ -254,16 +257,16 @@ const TERRAIN_SURFACE = /* wgsl */`
 
 		// damp sand below the berm (wet = 0 under water)
 		let dampMottle = smoothstep( 0.3, 0.7, dM.w + ( dN.y - 0.45 ) * 0.6 + ( macroB - 0.5 ) * 0.4 );
-		let wetK = smoothstep( 1.7, 0.5, h + dM.w * 0.3 ) * sandW * mix( 0.22, 0.5, dampMottle );
+		let wetK = (1.0 - smoothstep(0.5, 1.7, h + dM.w * 0.3 )) * sandW * mix( 0.22, 0.5, dampMottle );
 		let wetAlbedo = terrainSaturation( under * mat.wetDarken, 1.15 ) * vec3f( 0.97, 0.98, 1.0 );
 		albedoOut = mix( under, wetAlbedo, wetK );
 		outRough = 0.75;
-		let waveR = rip3 * 0.012 * fade3 * smoothstep( -0.3, -0.9, h ) * ( 1.0 - seagrassW );
+		let waveR = rip3 * 0.012 * fade3 * (1.0 - smoothstep(-0.9, -0.3, h )) * ( 1.0 - seagrassW );
 		let megaR = rip2 * 0.035 * fade2 * fieldW * ( 1.0 - seagrassW );
 		let sandH = grain * 0.004 + grainF * 0.003 + waveR + megaR;
 		let seabedH = seagrassW * ( blades * 0.05 + 0.08 ) + rubbleW * ( dN.x * 0.07 + dF.x * 0.015 );
 		hdOut = sandH + seabedH;
-		outAO = nr.w * ( 1.0 - seagrassW * 0.3 ) * ( 1.0 - rubbleW * smoothstep( 0.55, 0.2, dN.x ) * 0.35 );
+		outAO = nr.w * ( 1.0 - seagrassW * 0.3 ) * ( 1.0 - rubbleW * (1.0 - smoothstep(0.2, 0.55, dN.x )) * 0.35 );
 		terMeadowW = 0.0;
 
 	} else {
@@ -316,14 +319,14 @@ const TERRAIN_SURFACE = /* wgsl */`
 			let stain = smoothstep( 0.5, 0.7, streak ) * cliffK;
 			// dark, weathered basalt (the island's inland rock is darker and browner than the pale
 			// sea-cliff palette), stained down the fall line
-			var basalt = R.albedo * vec3f( 0.36, 0.34, 0.31 ) * ( 1.0 - stain * 0.45 ) * ( smoothstep( 0.42, 0.25, streak ) * cliffK * 0.15 + 1.0 );
+			var basalt = R.albedo * vec3f( 0.36, 0.34, 0.31 ) * ( 1.0 - stain * 0.45 ) * ( (1.0 - smoothstep(0.25, 0.42, streak )) * cliffK * 0.15 + 1.0 );
 			// soil and humus caught in the joints and hollows of the rock (low relief), so the face
 			// reads as fractured stone instead of a smooth plate
-			let joints = smoothstep( 0.42, 0.22, R.height + ( dN.w - 0.5 ) * 0.25 );
+			let joints = (1.0 - smoothstep(0.22, 0.42, R.height + ( dN.w - 0.5 ) * 0.25 ));
 			basalt = mix( basalt, mix( ${ S( 0.13, 0.1, 0.07 ) }, ${ S( 0.2, 0.2, 0.1 ) }, dF.y ), joints * 0.7 );
 			// moss / small plants on every ledge and on the less steep parts, more near the edges
 			let ledgeMoss = smoothstep( 0.4, 0.75, N0.y + ( dN.y - 0.45 ) * 0.6 ) * smoothstep( 0.25, 0.55, macroB + dM.y * 0.4 );
-			let fringe = smoothstep( 0.5, 0.58, rv ) * smoothstep( 0.8, 0.6, rv ) * smoothstep( 0.3, 0.6, dM.w + dN.y * 0.4 );
+			let fringe = smoothstep( 0.5, 0.58, rv ) * (1.0 - smoothstep(0.6, 0.8, rv )) * smoothstep( 0.3, 0.6, dM.w + dN.y * 0.4 );
 			let mossK = sat( max( ledgeMoss * 0.75, fringe * 0.8 ) + R.moss * 0.3 + joints * 0.25 );
 			rockAlbedo = mix( basalt, mix( ${ S( 0.12, 0.17, 0.05 ) }, ${ S( 0.22, 0.26, 0.09 ) }, dF.y ), mossK );
 			rockRough = R.rough;
@@ -334,7 +337,7 @@ const TERRAIN_SURFACE = /* wgsl */`
 
 		// ---- weights
 		let notRock = 1.0 - rockW;
-		let underW = smoothstep( 0.12, -0.6, h );
+		let underW = (1.0 - smoothstep(-0.6, 0.12, h ));
 		let landW = 1.0 - underW;
 		let sandW = smoothstep( 0.3, 0.72, sp.x + ( dM.z - 0.5 ) * 0.5 + ( mcr - 0.5 ) * 0.35 ) * notRock;
 		let pathW = smoothstep( 0.28, 0.62, sp.y + ( dN.y - 0.45 ) * 0.4 + ( dM.w - 0.5 ) * 0.25 ) * notRock * landW
@@ -357,7 +360,7 @@ const TERRAIN_SURFACE = /* wgsl */`
 		sand = sand * ( 1.0 - trod * 0.07 );
 		// the high-water band collects shell grit, coral bits and dried seaweed
 		let hw = h + ( dM.w - 0.5 ) * 0.5;
-		let wrackBand = smoothstep( 1.15, 1.4, hw ) * smoothstep( 2.1, 1.7, hw );
+		let wrackBand = smoothstep( 1.15, 1.4, hw ) * (1.0 - smoothstep(1.7, 2.1, hw ));
 		let pebDensity = smoothstep( 0.62, 0.85, macroB + dM.w * 0.3 ) * 0.2 + wrackBand * smoothstep( 0.3, 0.6, dM.y );
 		let pebW = smoothstep( 0.66, 0.8, dN.z ) * sat( pebDensity ) * smoothstep( 0.6, 0.9, sp.x ) * landW
 			* ( 1.0 - smoothstep( 12.0, 35.0, camDist ) );
@@ -443,9 +446,9 @@ const TERRAIN_SURFACE = /* wgsl */`
 		}
 		// seen from above the dark soil shows between the clumps; at grazing angles blade sides
 		// cover everything (lighter, more saturated)
-		let gapK = smoothstep( 0.3, 0.95, NdV ) * smoothstep( 0.62, 0.3, clump );
+		let gapK = smoothstep( 0.3, 0.95, NdV ) * (1.0 - smoothstep(0.3, 0.62, clump ));
 		lawn = mix( lawn, MEADOW_soil, gapK * 0.45 );
-		lawn = mix( lawn, terrainSaturation( lawn * 1.12, 1.15 ), smoothstep( 0.45, 0.1, NdV ) * 0.6 );
+		lawn = mix( lawn, terrainSaturation( lawn * 1.12, 1.15 ), (1.0 - smoothstep(0.1, 0.45, NdV )) * 0.6 );
 		// travelling gusts flatten the grass: the paler blade backs show as waves (same gust
 		// field as the grass blades)
 		let windStrength = max( frame.windSpeed * 0.1, 0.03 );
@@ -499,7 +502,7 @@ const TERRAIN_SURFACE = /* wgsl */`
 		dirt = mix( dirt, ${ S( 0.3, 0.22, 0.15 ) }, jungleW * 0.7 );
 		dirt = mix( dirt, ${ S( 0.56, 0.53, 0.48 ) }, smoothstep( 0.72, 0.82, dN.z ) * 0.5 );
 		// grass creeping onto the trail, a grassy strip between the two worn ruts
-		let creep = smoothstep( 0.45, 0.7, dN.y + ( dF.y - 0.45 ) * 0.5 ) * smoothstep( 0.9, 0.5, sp.y );
+		let creep = smoothstep( 0.45, 0.7, dN.y + ( dF.y - 0.45 ) * 0.5 ) * (1.0 - smoothstep(0.5, 0.9, sp.y ));
 		dirt = mix( dirt, lawn, creep * 0.8 );
 
 		// ---- combine
@@ -530,8 +533,8 @@ const TERRAIN_SURFACE = /* wgsl */`
 			// roots: horizontal coordinate along the face, stretched down the fall line
 			let ru = terDetail( vec2f( dot( xz, tanF ) / 0.8, h / 0.5 ) + vec2f( 0.37, 0.11 ) );
 			let rv = terDetail( vec2f( dot( xz, tanF ) / 1.7 + h * 0.6, h / 0.9 ) + vec2f( 0.71, 0.29 ) );
-			let rootLive = smoothstep( 0.035, 0.0, abs( ru.x - 0.5 ) ) * smoothstep( 0.45, 0.62, ru.w );
-			let rootDead = smoothstep( 0.03, 0.0, abs( rv.z - 0.52 ) ) * smoothstep( 0.5, 0.66, rv.y );
+			let rootLive = (1.0 - smoothstep(0.0, 0.035, abs( ru.x - 0.5 ) )) * smoothstep( 0.45, 0.62, ru.w );
+			let rootDead = (1.0 - smoothstep(0.0, 0.03, abs( rv.z - 0.52 ) )) * smoothstep( 0.5, 0.66, rv.y );
 			soil = mix( soil, ${ S( 0.17, 0.12, 0.08 ) }, rootLive * 0.85 );
 			soil = mix( soil, ${ S( 0.8, 0.75, 0.66 ) }, rootDead * 0.75 );
 			// damp, darker sand toward the toe and in seepage streaks
@@ -555,10 +558,10 @@ const TERRAIN_SURFACE = /* wgsl */`
 		// damp sand below the berm: darker in mottled, drying patches even when the swash has not
 		// reached it lately
 		let dampMottle = smoothstep( 0.3, 0.7, dM.w + ( dN.y - 0.45 ) * 0.6 + ( macroB - 0.5 ) * 0.4 );
-		let damp = smoothstep( 1.7, 0.5, h + dM.w * 0.3 ) * sandW * mix( 0.22, 0.5, dampMottle );
+		let damp = (1.0 - smoothstep(0.5, 1.7, h + dM.w * 0.3 )) * sandW * mix( 0.22, 0.5, dampMottle );
 		// sand dries in mottled patches; backwash leaves faint rills down the slope
 		let mottle = smoothstep( 0.25, 0.75, dM.w + ( dN.y - 0.45 ) * 0.5 );
-		let dryEdge = smoothstep( 0.0, 0.6, wet ) * smoothstep( 1.0, 0.6, wet );
+		let dryEdge = smoothstep( 0.0, 0.6, wet ) * (1.0 - smoothstep(0.6, 1.0, wet ));
 		let wetK = max( wet, damp ) * ( 1.0 - dryEdge * mottle * 0.6 ) * notRock;
 		let slopeDir = normalize( N0.xz + vec2f( 1e-4, 0.0 ) );
 		let rillK = smoothstep( 0.2, 0.9, wet ) * smoothstep( 0.05, 0.6, h ) * sandW;
@@ -570,12 +573,12 @@ const TERRAIN_SURFACE = /* wgsl */`
 		let sl = ( h + dM.w * 0.18 + dN.w * 0.05 ) / 0.13;
 		let slD = abs( fract( sl ) - 0.5 );
 		let slW = fwidth( sl ) + 1e-4;
-		let swashLine = smoothstep( slW * 1.5 + 0.04, 0.0, slD ) * smoothstep( 0.2, 0.4, h ) * smoothstep( 1.6, 1.2, h )
+		let swashLine = smoothstep( slW * 1.5 + 0.04, 0.0, slD ) * smoothstep( 0.2, 0.4, h ) * (1.0 - smoothstep(1.2, 1.6, h ))
 			* smoothstep( 0.45, 0.65, dM.y + ( macroB - 0.5 ) * 0.4 ) * sandW * ( 1.0 - smoothstep( 0.8, 2.0, slW * 10.0 ) );
 		albedo = mix( albedo * ( 1.0 - swashLine * 0.3 ), ${ S( 0.9, 0.88, 0.84 ) }, swashLine * smoothstep( 0.6, 0.75, dF.z ) * 0.5 );
 		// foam residue: lacy patterns stranded on the sand
 		var residue = sat( wetFoam.y ) * landW * notRock;
-		if ( residue > 0.0 ) { residue *= smoothstep( 0.42, 0.18, terDetail( ${ rot2( 'xz', 0.4 ) } / 0.9 ).x ) * 0.7 + 0.3; }
+		if ( residue > 0.0 ) { residue *= (1.0 - smoothstep(0.18, 0.42, terDetail( ${ rot2( 'xz', 0.4 ) } / 0.9 ).x )) * 0.7 + 0.3; }
 		albedo = mix( albedo, ${ S( 0.88, 0.9, 0.9 ) }, residue );
 
 		// ---- roughness
@@ -591,7 +594,7 @@ const TERRAIN_SURFACE = /* wgsl */`
 
 		// ---- micro relief for the normal
 		let windR = rip1 * 0.005 * windK;
-		let waveR = rip3 * 0.012 * fade3 * smoothstep( -0.3, -0.9, h ) * ( 1.0 - seagrassW );
+		let waveR = rip3 * 0.012 * fade3 * (1.0 - smoothstep(-0.9, -0.3, h )) * ( 1.0 - seagrassW );
 		let megaR = rip2 * 0.035 * fade2 * fieldW * ( 1.0 - seagrassW );
 		let sandH = ( grain * 0.004 + grainF * 0.003 + pebW * 0.004 + windR + waveR + megaR ) * ( 1.0 - wet * 0.6 )
 			+ rill * 0.006 * rillK;
@@ -610,7 +613,7 @@ const TERRAIN_SURFACE = /* wgsl */`
 		// ---- ambient occlusion: baked horizon + cavity, plus litter / crevices / seagrass canopy
 		let aoDetail = mix( 1.0, dN.y * 0.5 + 0.7, jungleW * ( 1.0 - sandW ) * notRock * landW )
 			* mix( 1.0, smoothstep( 0.2, 0.7, clump ) * 0.35 + 0.65, meadowW );
-		outAO = nr.w * aoDetail * ( 1.0 - seagrassW * 0.3 ) * ( 1.0 - rubbleW * smoothstep( 0.55, 0.2, dN.x ) * 0.35 )
+		outAO = nr.w * aoDetail * ( 1.0 - seagrassW * 0.3 ) * ( 1.0 - rubbleW * (1.0 - smoothstep(0.2, 0.55, dN.x )) * 0.35 )
 			* mix( 1.0, smoothstep( 0.15, 0.6, canopyH ) * 0.6 + 0.4, canopyW );
 
 		albedoOut = albedo;

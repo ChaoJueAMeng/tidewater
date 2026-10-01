@@ -286,10 +286,10 @@ export class BirdBatch {
 		// edge, white body and tail; breeding birds have a black hood, winter birds a grey smudge
 		let white = ${ srgb( 0.93, 0.93, 0.92 ) }; let slate = ${ srgb( 0.38, 0.4, 0.43 ) }; let black = ${ srgb( 0.05, 0.05, 0.055 ) };
 		let hooded = seed < 0.5;
-		let mantle = smoothstep( 0.1, 0.45, N.y ) * smoothstep( -0.1, -0.07, P.z ) * smoothstep( 0.1, 0.075, P.z );
+		let mantle = smoothstep( 0.1, 0.45, N.y ) * smoothstep( -0.1, -0.07, P.z ) * (1.0 - smoothstep(0.075, 0.1, P.z ));
 		let head = smoothstep( 0.1, 0.115, P.z );
-		let eyeArc = smoothstep( 0.006, 0.004, length( vec2f( P.z - 0.139, P.y - 0.037 ) ) ) * smoothstep( 0.002, 0.004, length( vec2f( P.z - 0.141, P.y - 0.032 ) ) );
-		let hood = select( head * smoothstep( 0.012, 0.004, length( vec2f( P.z - 0.126, P.y - 0.03 ) ) ) * 0.45, head * ( 1.0 - eyeArc ), hooded );
+		let eyeArc = (1.0 - smoothstep(0.004, 0.006, length( vec2f( P.z - 0.139, P.y - 0.037 ) ) )) * smoothstep( 0.002, 0.004, length( vec2f( P.z - 0.141, P.y - 0.032 ) ) );
+		let hood = select( head * (1.0 - smoothstep(0.004, 0.012, length( vec2f( P.z - 0.126, P.y - 0.03 ) ) )) * 0.45, head * ( 1.0 - eyeArc ), hooded );
 		let body = mix( mix( white, slate, mantle ), select( ${ srgb( 0.45, 0.45, 0.47 ) }, black, hooded ), hood );
 		let tipK = smoothstep( 0.68, 0.76, u );
 		let edge = smoothstep( 0.9, 0.97, v ) * ( 1.0 - tipK ) * ( 1.0 - fold );
@@ -304,10 +304,10 @@ export class BirdBatch {
 		// royal tern: pale grey mantle and upperwing with a dusky primary wedge, white body,
 		// shaggy black crest behind a white forehead, orange bill, black legs
 		let white = ${ srgb( 0.95, 0.95, 0.94 ) }; let grey = ${ srgb( 0.74, 0.77, 0.8 ) };
-		let mantle = smoothstep( 0.15, 0.5, N.y ) * smoothstep( -0.095, -0.07, P.z ) * smoothstep( 0.1, 0.075, P.z );
-		let cap = smoothstep( 0.108, 0.12, P.z ) * smoothstep( 0.158, 0.145, P.z ) * smoothstep( 0.028, 0.033, P.y );
+		let mantle = smoothstep( 0.15, 0.5, N.y ) * smoothstep( -0.095, -0.07, P.z ) * (1.0 - smoothstep(0.075, 0.1, P.z ));
+		let cap = smoothstep( 0.108, 0.12, P.z ) * (1.0 - smoothstep(0.145, 0.158, P.z )) * smoothstep( 0.028, 0.033, P.y );
 		let body = mix( mix( white, grey, mantle ), ${ srgb( 0.04, 0.04, 0.045 ) }, cap );
-		let wedge = smoothstep( 0.66, 0.8, u ) * ( smoothstep( 0.2, 0.0, v ) * 0.5 + 0.5 );
+		let wedge = smoothstep( 0.66, 0.8, u ) * ( (1.0 - smoothstep(0.0, 0.2, v )) * 0.5 + 0.5 );
 		let wingTop = mix( grey, ${ srgb( 0.32, 0.33, 0.35 ) }, wedge );
 		let wingBot = mix( white, ${ srgb( 0.55, 0.56, 0.58 ) }, smoothstep( 0.82, 0.95, u ) * smoothstep( 0.4, 1.0, v ) );
 		c = select( select( body, mix( white, grey, 0.3 ), isTail ), select( wingBot, wingTop, top ), isWing );
@@ -327,9 +327,9 @@ export class BirdBatch {
 		let body = mix( mix( belly, back, smoothstep( -0.35, 0.25, N.y ) ), mix( neckCol, head, smoothstep( 0.22, 0.25, P.z ) ), neckZone );
 		let flight = max( smoothstep( 0.52, 0.6, u ), smoothstep( 0.45, 0.62, v ) * ( 1.0 - fold ) );
 		let wingTop = mix( mix( ${ srgb( 0.56, 0.55, 0.51 ) }, ${ srgb( 0.72, 0.71, 0.67 ) }, ( fnz * 0.5 + 0.5 ) * 0.6 ), ${ srgb( 0.1, 0.09, 0.085 ) }, flight );
-		let wingBot = mix( ${ srgb( 0.2, 0.19, 0.18 ) }, ${ srgb( 0.45, 0.44, 0.42 ) }, smoothstep( 0.2, 0.35, v ) * smoothstep( 0.6, 0.4, v ) * smoothstep( 0.6, 0.3, u ) );
+		let wingBot = mix( ${ srgb( 0.2, 0.19, 0.18 ) }, ${ srgb( 0.45, 0.44, 0.42 ) }, smoothstep( 0.2, 0.35, v ) * (1.0 - smoothstep(0.4, 0.6, v )) * (1.0 - smoothstep(0.3, 0.6, u )) );
 		c = select( select( body, ${ srgb( 0.2, 0.19, 0.18 ) }, isTail ), select( wingBot, wingTop, top ), isWing );
-		let pouch = smoothstep( 0.3, 0.38, v ) * smoothstep( 0.7, 0.62, v );
+		let pouch = smoothstep( 0.3, 0.38, v ) * (1.0 - smoothstep(0.62, 0.7, v ));
 		c = select( c, mix( mix( ${ srgb( 0.58, 0.54, 0.5 ) }, ${ srgb( 0.75, 0.55, 0.45 ) }, smoothstep( 0.6, 1.0, u ) ), ${ srgb( 0.22, 0.21, 0.2 ) }, pouch ), isBill );
 		c = select( c, ${ srgb( 0.12, 0.12, 0.12 ) }, isLeg );
 		trans *= 0.5;
@@ -340,12 +340,12 @@ export class BirdBatch {
 		// brown bar on the upperwing, juveniles a white head and breast; males a red throat
 		let black = ${ srgb( 0.035, 0.035, 0.04 ) };
 		let female = seed < 0.45; let juvenile = seed > 0.85;
-		let breast = smoothstep( 0.2, -0.3, N.y ) * smoothstep( -0.06, 0.0, P.z ) * smoothstep( 0.14, 0.1, P.z );
+		let breast = (1.0 - smoothstep(-0.3, 0.2, N.y )) * smoothstep( -0.06, 0.0, P.z ) * (1.0 - smoothstep(0.1, 0.14, P.z ));
 		let headW = smoothstep( 0.13, 0.16, P.z );
 		let white = ${ srgb( 0.9, 0.9, 0.88 ) };
 		let body = mix( black, white, select( select( 0.0, breast, female ), max( breast, headW ), juvenile ) );
-		let throat = smoothstep( 0.13, 0.16, P.z ) * smoothstep( 0.0, -0.5, N.y ) * select( 1.0, 0.0, female || juvenile );
-		let bar = smoothstep( 0.08, 0.14, u ) * smoothstep( 0.45, 0.38, u ) * smoothstep( 0.12, 0.22, v ) * smoothstep( 0.5, 0.4, v ) * select( 0.4, 1.0, female || juvenile );
+		let throat = smoothstep( 0.13, 0.16, P.z ) * (1.0 - smoothstep(-0.5, 0.0, N.y )) * select( 1.0, 0.0, female || juvenile );
+		let bar = smoothstep( 0.08, 0.14, u ) * (1.0 - smoothstep(0.38, 0.45, u )) * smoothstep( 0.12, 0.22, v ) * (1.0 - smoothstep(0.4, 0.5, v )) * select( 0.4, 1.0, female || juvenile );
 		let wingTop = mix( black, ${ srgb( 0.32, 0.25, 0.18 ) }, bar );
 		c = select( select( mix( body, ${ srgb( 0.55, 0.06, 0.05 ) }, throat ), black, isTail ), select( black, wingTop, top ), isWing );
 		c = select( c, ${ srgb( 0.5, 0.52, 0.56 ) }, isBill );
@@ -358,12 +358,12 @@ export class BirdBatch {
 		// sanderling (winter): pale grey above with dark feather centres, white below, dark
 		// shoulder and primaries, bold white wing bar, black bill and legs
 		let white = ${ srgb( 0.95, 0.95, 0.94 ) }; let grey = mix( ${ srgb( 0.62, 0.62, 0.6 ) }, ${ srgb( 0.48, 0.48, 0.47 ) }, smoothstep( 0.2, 0.7, fnz ) );
-		let upper = smoothstep( -0.05, 0.35, N.y ) * max( smoothstep( 0.092, 0.08, P.z ), smoothstep( 0.2, 0.6, N.y ) );
+		let upper = smoothstep( -0.05, 0.35, N.y ) * max( (1.0 - smoothstep(0.08, 0.092, P.z )), smoothstep( 0.2, 0.6, N.y ) );
 		let body = mix( white, grey, upper );
-		let bar = smoothstep( 0.18, 0.26, u ) * smoothstep( 0.78, 0.7, u ) * smoothstep( 0.42, 0.48, v ) * smoothstep( 0.66, 0.6, v ) * ( 1.0 - fold );
-		let shoulder = smoothstep( 0.2, 0.3, u ) * smoothstep( 0.55, 0.45, u ) * smoothstep( 0.3, 0.1, v );
+		let bar = smoothstep( 0.18, 0.26, u ) * (1.0 - smoothstep(0.7, 0.78, u )) * smoothstep( 0.42, 0.48, v ) * (1.0 - smoothstep(0.6, 0.66, v )) * ( 1.0 - fold );
+		let shoulder = smoothstep( 0.2, 0.3, u ) * (1.0 - smoothstep(0.45, 0.55, u )) * (1.0 - smoothstep(0.1, 0.3, v ));
 		let wingTop = mix( mix( mix( grey, ${ srgb( 0.12, 0.12, 0.12 ) }, smoothstep( 0.62, 0.72, u ) ), white, bar ), ${ srgb( 0.1, 0.1, 0.1 ) }, shoulder * 0.8 );
-		c = select( select( body, mix( grey, ${ srgb( 0.2, 0.2, 0.2 ) }, smoothstep( 0.25, 0.0, abs( u - 0.5 ) ) ), isTail ), select( white, wingTop, top ), isWing );
+		c = select( select( body, mix( grey, ${ srgb( 0.2, 0.2, 0.2 ) }, (1.0 - smoothstep(0.0, 0.25, abs( u - 0.5 ) )) ), isTail ), select( white, wingTop, top ), isWing );
 		c = select( c, ${ srgb( 0.04, 0.04, 0.04 ) }, isBill || isLeg );
 
 	}

@@ -1,4 +1,4 @@
-import { Material, ShaderModule, G } from '../engine/webgpu.js';
+import { Material, ShaderModule, G, GPU } from '../engine/webgpu.js';
 import { commonModule } from '../engine/render/wgsl/common.js';
 import { whaleWaterModule } from './WhaleWater.js';
 import { REFRACTION_GUARD } from './RefractionPass.js';
@@ -53,7 +53,7 @@ export const viewPositionFromViewZ = ( uv, viewZ ) => `viewPositionFromViewZ( ${
 // shader: previous world position = current, staticVelocity), r.mask = ( seenFromBelow, 1, 0, 1 ).
 export class WaterMaterial extends Material {
 
-	constructor( { surface, sky, sceneCopy, sceneDepthHalf = null, refraction = null, reflection = null, hullMask = null, hullMaskActive = null } ) {
+	constructor( { surface, sky, environment = null, sceneCopy, sceneDepthHalf = null, refraction = null, reflection = null, hullMask = null, hullMaskActive = null } ) {
 
 		super( {
 			name: 'water',
@@ -86,6 +86,7 @@ export class WaterMaterial extends Material {
 		// (`surface` is the Material's surface snippet here: the WaterSurface is `waterSurface`)
 		this.waterSurface = surface;
 		this.sky = sky;
+		this.environment = environment;
 		this.reflection = reflection;
 		this.clouds = null; // set by the app before the first frame
 		this.cheap = false;
@@ -155,12 +156,16 @@ export class WaterMaterial extends Material {
 		const T = !! S.terrain;
 		const SH = !! S.shore;
 		const SIM = !! S.shoreSim;
-		const SF = !! S.surfFoam;
-		const CL = !! ( this.clouds && this.clouds.module );
+		const SF = ! S.lowTextureMode && !! S.surfFoam;
+		// The full sky reflection plus cloud shadow needs five textures. On constrained adapters
+		// use the one-texture environment cube generated from that same sky.
+		const lowTextures = ( GPU.limits?.maxSampledTexturesPerShaderStage ?? Infinity ) < 21;
+		const CL = ! lowTextures && !! ( this.clouds && this.clouds.module );
 		const HULL = !! ( this.hullMaskTexture && this.hullMaskActive );
 		const REFL = !! ( this.reflection && this.reflection.module );
+		const skyModule = lowTextures && this.environment ? waterEnvironmentSkyModule( this.environment ) : sky && sky.module;
 
-		this.modules = [ commonModule, waterFresnelModule, waterHelpersModule, whaleWaterModule, S.module, sky && sky.module, CL && this.clouds.module,
+		this.modules = [ commonModule, waterFresnelModule, waterHelpersModule, whaleWaterModule, S.module, skyModule, CL && this.clouds.module,
 			SIM && S.shoreSim.module, REFL && this.reflection.module, this.cameraWaterHeightNode && this.cameraWaterHeightNode.module ].filter( Boolean );
 		this.bindings.waterSceneColor = { texture: this.sceneColorTexture };
 		this.bindings.waterSceneDepth = { texture: this.sceneDepthTexture, sampleType: 'unfilterable-float' };
@@ -263,16 +268,16 @@ ${ hasClip ? `	if ( vDepth < 1.0 ) {
 	}` : '' }
 	// the foam line riding the swash front, per pixel: a dense bubbly bead right at the edge while
 	// the sheet runs up, a thinning lace behind it; weaker in the backwash (it sinks into the sand)
-	let uprush = smoothstep( 0.46, 0.32, swTau );
-	let bead = smoothstep( -0.01, 0.05, frontD ) * smoothstep( 0.6, 0.12, frontD );
-	let trail = smoothstep( -0.01, 0.25, frontD ) * smoothstep( 2.2, 0.3, frontD );
+	let uprush = (1.0 - smoothstep(0.32, 0.46, swTau ));
+	let bead = smoothstep( -0.01, 0.05, frontD ) * (1.0 - smoothstep(0.12, 0.6, frontD ));
+	let trail = smoothstep( -0.01, 0.25, frontD ) * (1.0 - smoothstep(0.3, 2.2, frontD ));
 	// patchy along the front (dense bunches and thin stretches), not an even white rope (only where
 	// the edge foam below can be non-zero: it is weighted by the run-up and the shallow depth)
 	var edgePatch = 1.0;
 ${ hasClip ? `	if ( swRt > 0.0 && vDepth < 0.4 ) {
 		edgePatch = smoothstep( -0.45, 0.55, perlin2( pos.xz * 0.42 ) ) * 0.7 + smoothstep( -0.3, 0.6, perlin2( pos.xz * 1.7 + vec2f( 3.1, 7.7 ) ) ) * 0.3;
 	}` : '' }
-	let edgeFoam = ( bead * mix( 0.45, 1.1, uprush ) * mix( 0.35, 1.0, edgePatch ) + trail * mix( 0.12, 0.4, uprush ) * edgePatch ) * smoothstep( 0.0, 1.0, swRt ) * smoothstep( 0.4, -0.2, vDepth );
+	let edgeFoam = ( bead * mix( 0.45, 1.1, uprush ) * mix( 0.35, 1.0, edgePatch ) + trail * mix( 0.12, 0.4, uprush ) * edgePatch ) * smoothstep( 0.0, 1.0, swRt ) * (1.0 - smoothstep(-0.2, 0.4, vDepth ));
 	// the meniscus: the last decimetre of the advancing sheet bends down to the sand
 	let lipW = ( 1.0 - smoothstep( 0.0, 0.14, frontD ) ) * uprush;
 
@@ -337,7 +342,7 @@ ${ SH ? '	let folded = surf.jacobian < 0.1 || normalize( in.vs.vShoreN ).y < 0.3
 		let Rup = max( Rraw.y, 0.004 ) + sigmaUnres * 1.3 * ( 1.0 - max( Rraw.y, 0.0 ) );
 		let R = normalize( vec3f( Rraw.x, Rup, Rraw.z ) );
 		// reflections pointing below the horizon hit other waves: fade toward a dark sea color
-		let horizonOcc = max( smoothstep( -0.12, 0.08, Rraw.y ), smoothstep( 0.25, 0.06, thickness ) );
+		let horizonOcc = max( smoothstep( -0.12, 0.08, Rraw.y ), (1.0 - smoothstep(0.06, 0.25, thickness )) );
 		// (unused where both its weights are 0: horizonOcc here, the rim at the swash front below)
 		var skyRefl = vec3f( 0.0 );
 		if ( horizonOcc > 0.0 || frontD < 0.1 ) { skyRefl = skyReflectionRadiance( R ); }
@@ -532,7 +537,7 @@ ${ SF ? '		let foamLit = surfFoamLight( surf.foamInfo, N, L, V, sunLight, pos );
 		let foamCol = foamLit * mat.foamIntensity;
 
 		// a thin bright rim just behind the edge: the rounded bead catches the sky
-		let rim = smoothstep( 0.0, 0.025, frontD ) * smoothstep( 0.1, 0.035, frontD ) * uprush;
+		let rim = smoothstep( 0.0, 0.025, frontD ) * (1.0 - smoothstep(0.035, 0.1, frontD )) * uprush;
 		let water = mix( transmitted, reflCol, F ) + sunSpec + skyRefl * ( 0.22 * rim );
 		let shaded = mix( water, foamCol + sunSpec * 0.05, sat( foam ) );
 		// fade into the sand right at the leading edge (anti-aliased by the film thickness)
@@ -637,6 +642,16 @@ ${ SF ? '		let foamLit = surfFoamLight( surf.foamInfo, N, L, V, sunLight, pos );
 // helpers the output snippet calls (module-level so they sit outside the material functions)
 const RG = REFRACTION_GUARD;
 const _g6 = ( v ) => v.toFixed( 6 );
+// The full atmosphere/cloud reflection needs five textures. On 16-texture adapters reuse the
+// environment source cube (one texture, refreshed from the same sky) instead.
+const waterEnvironmentSkyModule = ( environment ) => new ShaderModule( { name: 'waterEnvironmentSky', deps: [ commonModule ], bindings: { waterEnvCube: { texture: () => environment.source, viewDimension: 'cube' } }, code: /* wgsl */`
+fn skyReflectionRadiance( dir: vec3f ) -> vec3f {
+	return textureSampleLevel( waterEnvCube, smpLinearClamp, dir, 0.0 ).rgb;
+}
+fn skyRadianceWithClouds( dir: vec3f, withSun: bool ) -> vec3f {
+	return textureSampleLevel( waterEnvCube, smpLinearClamp, dir, 0.0 ).rgb;
+}
+` } );
 const WATER_HELPERS = /* wgsl */`
 // a refracted sample is usable when it lies this far behind the water surface (view depth, m): objects in
 // front of it (the hull you stand in, pier piles) are rejected
@@ -724,14 +739,14 @@ fn _waterSSR( posV: vec3f, Rv: vec3f, y0: f32, ry: f32 ) -> vec4f {
 		// after refining, the ray must really touch the surface there (a ray that only passed far
 		// behind a thin or distant object is a false hit)
 		let gap = abs( _waterSceneZAt( uv ) - hitV.z );
-		let touch = smoothstep( max( b * 0.04, 0.4 ), max( b * 0.02, 0.2 ), gap );
+		let touch = (1.0 - smoothstep(max(b * 0.02, 0.2), max(b * 0.04, 0.4), gap));
 		// anything under the surface (seabed seen through the water, submerged hull) is not
 		// visible to a reflected ray: those rays run into the next wave instead
 		let hitY = ( frame.invView * vec4f( hitV, 1.0 ) ).y;
 		color = textureSampleLevel( waterSceneColor, smpLinearClamp, uv, 0.0 ).rgb;
-		let edge = smoothstep( 0.0, 0.06, uv.x ) * smoothstep( 1.0, 0.94, uv.x ) * smoothstep( 0.0, 0.06, uv.y ) * smoothstep( 1.0, 0.94, uv.y );
-		let facing = smoothstep( 0.5, 0.1, Rv.z ); // rays toward the camera leave the screen
-		weight = edge * facing * touch * smoothstep( 260.0, 120.0, hitT ) * smoothstep( frame.seaLevel - 0.15, frame.seaLevel + 0.35, hitY );
+		let edge = smoothstep( 0.0, 0.06, uv.x ) * (1.0 - smoothstep(0.94, 1.0, uv.x )) * smoothstep( 0.0, 0.06, uv.y ) * (1.0 - smoothstep(0.94, 1.0, uv.y ));
+		let facing = (1.0 - smoothstep(0.1, 0.5, Rv.z )); // rays toward the camera leave the screen
+		weight = edge * facing * touch * (1.0 - smoothstep(120.0, 260.0, hitT )) * smoothstep( frame.seaLevel - 0.15, frame.seaLevel + 0.35, hitY );
 	}
 	return vec4f( color, weight );
 }

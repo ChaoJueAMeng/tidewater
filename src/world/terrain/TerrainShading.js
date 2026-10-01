@@ -191,7 +191,7 @@ fn terrainRockSurface( p: vec3f, N: vec3f, h: f32, mcr: f32, seed: f32, mossAmou
 	let sw4 = pow( abs( N.xz ), vec2f( 4.0 ) );
 	let stainS = ( sa.w * sw4.x + sb.w * sw4.y ) / ( sw4.x + sw4.y + 1e-5 );
 	let stain = smoothstep( 0.52, 0.72, stainS ) * steep;
-	col = col * ( 1.0 - stain * 0.4 ) * ( smoothstep( 0.35, 0.2, stainS ) * steep * 0.12 + 1.0 );
+	col = col * ( 1.0 - stain * 0.4 ) * ( (1.0 - smoothstep(0.2, 0.35, stainS )) * steep * 0.12 + 1.0 );
 
 	// lichens on the dry upper faces
 	let dry = smoothstep( 2.6, 4.0, h );
@@ -206,20 +206,20 @@ fn terrainRockSurface( p: vec3f, N: vec3f, h: f32, mcr: f32, seed: f32, mossAmou
 	col = mix( col, mix( PAL_moss, PAL_mossDry, mid.w ), moss * 0.9 );
 
 	// shoreline zonation: black lichen band (splash zone), barnacles and algae in the intertidal
-	let splash = smoothstep( 0.5, 1.0, h ) * smoothstep( 2.8, 1.8, h + mid.w * 1.2 ) * smoothstep( 0.35, 0.6, mcr + mid.w * 0.3 );
+	let splash = smoothstep( 0.5, 1.0, h ) * (1.0 - smoothstep(1.8, 2.8, h + mid.w * 1.2 )) * smoothstep( 0.35, 0.6, mcr + mid.w * 0.3 );
 	col = mix( col, PAL_blackZone, splash * 0.55 );
 	// sun-bleached, weathered upper faces
 	col = mix( col, PAL_rockLight, smoothstep( 0.35, 0.95, N.y ) * smoothstep( 1.5, 3.0, h ) * 0.3 );
-	let inter = smoothstep( -0.7, -0.2, h ) * smoothstep( 0.7, 0.2, h );
+	let inter = smoothstep( -0.7, -0.2, h ) * (1.0 - smoothstep(0.2, 0.7, h ));
 	let barn = smoothstep( 0.62, 0.72, fine.z ) * inter * fineK;
 	col = mix( col, PAL_algae, inter * smoothstep( 0.4, 0.6, mid.y ) * 0.6 );
 	col = mix( col, PAL_barnacle, barn * 0.8 );
 	// below the water: algae films and pink coralline crusts
-	let sub = smoothstep( -0.3, -1.2, h );
+	let sub = (1.0 - smoothstep(-1.2, -0.3, h ));
 	col = mix( col, mix( PAL_algae, PAL_coralline, smoothstep( 0.45, 0.7, mid.w ) ), sub * 0.55 );
 
 	// wet below the swash line (dark, glossy)
-	let wet = smoothstep( 1.0, 0.25, h + mid.w * 0.3 );
+	let wet = (1.0 - smoothstep(0.25, 1.0, h + mid.w * 0.3 ));
 	col = col * mix( 1.0, 0.55, wet );
 
 	var r: RockSurface;
@@ -258,7 +258,7 @@ fn terrainMeadowTone( mA: f32, mB: f32, slope: f32, south: f32, detail: f32, has
 	let olive = smoothstep( 0.52, 0.6, m );
 	let yellow = smoothstep( 0.6, 0.67, m );
 	let straw = smoothstep( 0.66, 0.73, m + ( mB - 0.5 ) * 0.2 );
-	let lush = smoothstep( 0.46, 0.37, mB * 0.7 + mA * 0.3 + slope * 0.2 + dd * 0.2 );
+	let lush = (1.0 - smoothstep(0.37, 0.46, mB * 0.7 + mA * 0.3 + slope * 0.2 + dd * 0.2 ));
 	var c = mix( MEADOW_green, MEADOW_olive, olive );
 	c = mix( c, MEADOW_yellow, yellow * 0.8 );
 	c = mix( c, MEADOW_straw, straw * 0.55 );

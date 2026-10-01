@@ -174,7 +174,7 @@ export class App {
 		if ( this.reef.setOcean ) this.reef.setOcean( this.fft ); // coral / sea fan sway follows the simulated swell
 		this.foamTexture = createFoamTexture( renderer );
 		this.oceanLOD = new CDLOD( { gridSize: Number( qs.get( 'G' ) || 32 ), leafSize: 8, levels: 12, minY: - 25, maxY: 25 } );
-		this.surface = new WaterSurface( { fft: this.fft, cdlod: this.oceanLOD, foamTexture: this.foamTexture } );
+		this.surface = new WaterSurface( { fft: this.fft, cdlod: this.oceanLOD, foamTexture: this.foamTexture, lowTextureMode: ( GPU.limits?.maxSampledTexturesPerShaderStage ?? Infinity ) <= 16 } );
 		this.surface.terrain = this.terrainGPU;
 		this.seaDetail = new SeaDetail();
 		this.surface.detail = this.seaDetail;
@@ -195,7 +195,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 	let s = shoreSimSample( xz );
 	let inside = shoreSimInside( shoreSimUvOf( xz ) );
 	// outside the simulated region fall back to a static damp band
-	let band = smoothstep( 0.45, 0.0, h );
+	let band = (1.0 - smoothstep(0.0, 0.45, h ));
 	// foam left on the sand: the lace the water carried, stranded and popping (ShoreSim.sandFoam)
 	return vec2f( max( s.y, band * ( 1.0 - inside ) ), shoreSimSandFoam( xz, s, h ) );
 }`,
@@ -244,7 +244,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		// the sea is not drawn inside the boat (its hull volume masks the surface)
 		this.sceneRenderer.addHullMask( this.boat.createHullVolumeGeometry(), this.boat.group );
 		this.waterMaterial = new WaterMaterial( {
-			surface: this.surface, sky: this.sky, sceneCopy: this.sceneRenderer.opaqueCopy, sceneDepthHalf: this.sceneRenderer.opaqueDepthHalf.texture, refraction: this.refraction,
+			surface: this.surface, sky: this.sky, environment: this.environment, sceneCopy: this.sceneRenderer.opaqueCopy, sceneDepthHalf: ( GPU.limits?.maxSampledTexturesPerShaderStage ?? Infinity ) >= 22 ? this.sceneRenderer.opaqueDepthHalf.texture : null,
 			hullMask: this.sceneRenderer.hullMaskRT.texture, hullMaskActive: this.sceneRenderer.hullMaskActive,
 		} );
 		this.waterMaterial.clouds = this.clouds;

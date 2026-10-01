@@ -53,14 +53,14 @@ fn vegRosette( st: vec2f, G: f32, nLeaves: f32, width: f32, rot: f32 ) -> VegRos
 	let x = along / L;
 	let bx = clamp( ( x - 0.18 ) / 0.82, 0.0, 1.0 ); // blade after a short petiole
 	// obovate (widest beyond the middle) with a short pointed tip
-	let shape = pow( max( sin( pow( bx, 0.62 ) * 3.14159 ), 0.0 ), 0.8 ) * ( smoothstep( 1.0, 0.86, bx ) * 0.25 + 0.75 );
+	let shape = pow( max( sin( pow( bx, 0.62 ) * 3.14159 ), 0.0 ), 0.8 ) * ( (1.0 - smoothstep(0.86, 1.0, bx )) * 0.25 + 0.75 );
 	let hw = shape * width * L;
 	let inBlade = x > 0.16 && x < 1.0;
 	let dBlade = select( -1.0, hw - across, inBlade );
 	let dPet = select( -1.0, 0.012 - across, x < 0.2 );
 	var o: VegRosette;
 	o.d = max( dBlade, dPet );
-	let vein = smoothstep( 0.03, 0.0, across ) * smoothstep( 0.05, 0.25, bx ) * smoothstep( 1.0, 0.7, bx );
+	let vein = (1.0 - smoothstep(0.0, 0.03, across )) * smoothstep( 0.05, 0.25, bx ) * (1.0 - smoothstep(0.7, 1.0, bx ));
 	o.bright = ( ( h1 * 0.7 + lr * 0.3 ) * 0.22 + 0.88 ) * mix( 0.82, 1.08, bx ) * ( vein * 0.09 + 1.0 );
 	o.cell = h1 * 0.7 + lr * 0.3;
 	return o;

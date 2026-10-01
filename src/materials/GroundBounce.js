@@ -92,7 +92,7 @@ fn main( @builtin( global_invocation_id ) gid: vec3u ) {
 	let depth = max( frame.seaLevel - h, 0.0 );
 	let seabed = mix( ${ lin( 0.62, 0.58, 0.48 ) }, ${ lin( 0.25, 0.3, 0.22 ) }, smoothstep( 0.3, 0.7, sp.y ) );
 	let sea = seabed * exp( ( frame.waterAbsorption + frame.waterScattering ) * depth * -2.4 ) * 0.9 + vec3f( 0.01, 0.025, 0.03 );
-	let wet = smoothstep( 0.05, -0.1, h - frame.seaLevel );
+	let wet = (1.0 - smoothstep(-0.1, 0.05, h - frame.seaLevel ));
 	let albedo = mix( land, sea, wet );
 	let nSurf = mix( n, vec3f( 0.0, 1.0, 0.0 ), wet );
 	// heightfield sun shadow at the ground (same filtering as terrainSunShadowAt)
@@ -174,7 +174,7 @@ fn hookBounce( P: vec3f, Nw: vec3f ) -> vec3f {
 		let above = P.y - s.w;
 		// nothing from a surface above the receiver (under water: the sea surface is above), a
 		// little less high up where more of the view is taken by other objects
-		let fade = smoothstep( -0.3, 0.3, above ) * mix( 0.4, 1.0, smoothstep( 30.0, 4.0, above ) );
+		let fade = smoothstep( -0.3, 0.3, above ) * mix( 0.4, 1.0, (1.0 - smoothstep(4.0, 30.0, above )) );
 		${ cloudCode }
 		// a face turned away from a low sun looks at the ground its object shades (a long shadow)
 		let Lh = frame.sunDir.xz / max( length( frame.sunDir.xz ), 1e-3 );

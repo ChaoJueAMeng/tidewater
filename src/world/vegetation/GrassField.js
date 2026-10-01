@@ -675,7 +675,7 @@ fn vegMeadowTone( mA: f32, mB: f32, slope: f32, south: f32 ) -> VegMeadow {
 	let olive = smoothstep( 0.52, 0.6, m );
 	let yellow = smoothstep( 0.6, 0.67, m );
 	let straw = smoothstep( 0.66, 0.73, m + ( mB - 0.5 ) * 0.2 );
-	let lush = smoothstep( 0.46, 0.37, mB * 0.7 + mA * 0.3 + slope * 0.2 );
+	let lush = (1.0 - smoothstep(0.37, 0.46, mB * 0.7 + mA * 0.3 + slope * 0.2 ));
 	var c = mix( VEG_MEADOW_GREEN, VEG_MEADOW_OLIVE, olive );
 	c = mix( c, VEG_MEADOW_YELLOW, yellow * 0.8 );
 	c = mix( c, VEG_MEADOW_STRAW, straw * 0.55 );

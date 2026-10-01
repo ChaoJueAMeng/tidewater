@@ -584,7 +584,7 @@ export function scatterVegetation( site, seed = 99 ) {
 		site.cover( x, z, c );
 		if ( c.h < 2.6 ) return;
 		const clump = N.fbm( x / 30 - 3.1, z / 30 + 8.4, 3 );
-		const damp = c.gully * 0.8 + smoothstep( 7, 3, c.h ) * 0.25 + smoothstep( 0.25, 0.5, c.forest ) * ( 1 - smoothstep( 0.7, 0.95, c.forest ) ) * 0.25;
+		const damp = c.gully * 0.8 + (1.0 - smoothstep(3, 7, c.h )) * 0.25 + smoothstep( 0.25, 0.5, c.forest ) * ( 1 - smoothstep( 0.7, 0.95, c.forest ) ) * 0.25;
 		const p = damp * smoothstep( 0.05, 0.4, clump );
 		if ( rand() > p ) return;
 		if ( ! site.allowed( x, z, c, { minH: 2.6, maxBare: 0.3, clear: 1.0, maxSand: 0.15 } ) || c.ny < 0.8 ) return;
@@ -603,7 +603,7 @@ export function scatterVegetation( site, seed = 99 ) {
 		if ( c.h < 3 ) return;
 		const edge = smoothstep( 0.2, 0.45, c.forest ) * ( 1 - smoothstep( 0.7, 0.9, c.forest ) );
 		const od = site.obstacleDist( x, z );
-		const village = dv < 110 ? smoothstep( 16, 4, od ) * 0.45 + 0.04 : 0;
+		const village = dv < 110 ? (1.0 - smoothstep(4, 16, od )) * 0.45 + 0.04 : 0;
 		const p = ( edge * 0.12 + village ) * smoothstep( - 0.1, 0.3, N2.fbm( x / 18 + 2.2, z / 18 - 6.6, 2 ) );
 		if ( rand() > p ) return;
 		if ( ! site.allowed( x, z, c, { minH: 3, maxBare: 0.3, clear: 1.2, maxSand: 0.25 } ) || c.ny < 0.8 ) return;
@@ -621,7 +621,7 @@ export function scatterVegetation( site, seed = 99 ) {
 		site.cover( x, z, c );
 		if ( c.h < 3 ) return;
 		const od = site.obstacleDist( x, z );
-		const p = smoothstep( 10, 3.5, od ) * 0.35 * smoothstep( - 0.2, 0.3, N.fbm( x / 14 - 4.4, z / 14 + 6.6, 2 ) );
+		const p = (1.0 - smoothstep(3.5, 10, od )) * 0.35 * smoothstep( - 0.2, 0.3, N.fbm( x / 14 - 4.4, z / 14 + 6.6, 2 ) );
 		if ( rand() > p ) return;
 		if ( ! site.allowed( x, z, c, { minH: 3, maxBare: 0.3, clear: 0.8, maxSand: 0.25 } ) || c.ny < 0.85 ) return;
 		const sc = 0.85 + rand() * 0.3;

@@ -52,7 +52,7 @@ fn _vegPalmBark( y: f32, a: f32, H: f32, seed: f32, iv: f32 ) -> VegBark {
 	let rk = vegHash12( vec2f( k, seed * 13.7 ) );
 	let gw = mix( 0.05, 0.14, rk );
 	let groove = ( smoothstep( gw, 0.0, fr ) + smoothstep( 1.0 - gw * 0.6, 1.0, fr ) ) * mix( 0.45, 1.0, vegHash12( vec2f( k * 1.3, seed * 3.1 ) ) );
-	let ridge = smoothstep( 0.07, 0.15, fr ) * smoothstep( 0.45, 0.16, fr );
+	let ridge = smoothstep( 0.07, 0.15, fr ) * (1.0 - smoothstep(0.16, 0.45, fr ));
 	// partial rings: each ring fades out around part of the circumference
 	let amp = smoothstep( 0.28, 0.6, vegNoise( vec2f( ca * 1.8 + k * 3.17, sa * 1.8 + k * 1.71 + seed * 11.0 ) ) ) * 0.75 + 0.25;
 	// fine vertical fissures (level set of a vertically stretched noise) and bark plates
@@ -61,7 +61,7 @@ fn _vegPalmBark( y: f32, a: f32, H: f32, seed: f32, iv: f32 ) -> VegBark {
 	// fissures: short, broken vertical splits (not continuous grain lines)
 	let segA = smoothstep( 0.45, 0.62, vegNoise( vec2f( a * 30.0, y * 4.5 + seed * 9.0 ) ) );
 	let segB = smoothstep( 0.5, 0.66, vegNoise( vec2f( a * 60.0 + 3.7, y * 9.0 + seed * 21.0 ) ) );
-	let crack = max( smoothstep( 0.09, 0.0, abs( nf - 0.5 ) ) * segA, smoothstep( 0.06, 0.0, abs( nf2 - 0.5 ) ) * segB * 0.7 );
+	let crack = max( (1.0 - smoothstep(0.0, 0.09, abs( nf - 0.5 ) )) * segA, (1.0 - smoothstep(0.0, 0.06, abs( nf2 - 0.5 ) )) * segB * 0.7 );
 	let plate = vegNoise( vec2f( a * 24.0, y * 3.5 + seed * 17.0 ) );
 	let blotch = vegNoise( vec2f( a * 6.0, y * 0.4 + seed * 13.0 ) );
 	// grey-brown bark weathering to silver-grey, per palm
@@ -75,17 +75,17 @@ fn _vegPalmBark( y: f32, a: f32, H: f32, seed: f32, iv: f32 ) -> VegBark {
 	bark = mix( bark, ${ C( 0xb3ad9f ) }, smoothstep( 0.55, 0.75, vegNoise( vec2f( a * 8.0, y * 1.3 + seed * 61.0 ) ) ) * 0.35 * ( 1.0 - yn * 0.5 ) );
 	bark = bark * mix( 1.0, 0.7, groove * amp ) * ( ridge * amp * 0.1 + 1.0 ) * mix( 1.0, 0.5, crack );
 	// lichen: pale grey-green crusts and white spots, a little orange; darker rain streaks
-	let lic = smoothstep( 0.6, 0.72, vegNoise( vec2f( a * 9.0, y * 2.1 + seed * 23.0 ) ) + ( vegNoise( vec2f( a * 31.0, y * 7.0 ) ) - 0.5 ) * 0.3 ) * smoothstep( 0.9, 0.2, yn );
+	let lic = smoothstep( 0.6, 0.72, vegNoise( vec2f( a * 9.0, y * 2.1 + seed * 23.0 ) ) + ( vegNoise( vec2f( a * 31.0, y * 7.0 ) ) - 0.5 ) * 0.3 ) * (1.0 - smoothstep(0.2, 0.9, yn ));
 	let licC = mix( ${ C( 0x8e917f ) }, ${ C( 0xa9a799 ) }, plate );
 	bark = mix( bark, licC, lic * 0.5 );
-	let streak = smoothstep( 0.62, 0.8, vegNoise( vec2f( a * 16.0, y * 0.12 + seed * 5.0 ) ) ) * smoothstep( 1.0, 0.6, yn );
+	let streak = smoothstep( 0.62, 0.8, vegNoise( vec2f( a * 16.0, y * 0.12 + seed * 5.0 ) ) ) * (1.0 - smoothstep(0.6, 1.0, yn ));
 	bark = bark * ( 1.0 - streak * 0.28 );
 	// damp, dark base (splash of sand and soil) and the mass of exposed roots at the ground
-	let baseK = smoothstep( 1.4, 0.2, y + ( blotch - 0.5 ) * 0.8 );
+	let baseK = (1.0 - smoothstep(0.2, 1.4, y + ( blotch - 0.5 ) * 0.8 ));
 	bark = mix( bark, bark * vec3f( 0.62, 0.56, 0.48 ), baseK );
 	let rootN = vegNoise( vec2f( a * 26.0, y * 2.2 + seed * 19.0 ) );
-	let roots = smoothstep( 0.42, 0.05, y ) * smoothstep( 0.35, 0.6, rootN );
-	bark = mix( bark, mix( ${ C( 0x3a2e22 ) }, ${ C( 0x5e4a36 ) }, rootN ), smoothstep( 0.5, 0.0, y ) * 0.85 );
+	let roots = (1.0 - smoothstep(0.05, 0.42, y )) * smoothstep( 0.35, 0.6, rootN );
+	bark = mix( bark, mix( ${ C( 0x3a2e22 ) }, ${ C( 0x5e4a36 ) }, rootN ), (1.0 - smoothstep(0.0, 0.5, y )) * 0.85 );
 	// fibrous old frond bases (boot) under the crown: criss-cross fibre mat, brown
 	let boot = smoothstep( H - 1.0, H - 0.35, y + ( blotch - 0.5 ) * 0.3 );
 	let fib = sin( A * 34.0 + y * 30.0 ) * sin( A * 34.0 - y * 30.0 ) * 0.5 + 0.5;
@@ -196,17 +196,17 @@ fn vegBroadAlbedo( part: f32, y: f32, x: f32, age: f32, W: f32, fseed: f32, seed
 		// primary veins a touch paler, midrib pale
 		let L = W / 0.47;
 		let p = ( ( y - 0.16 ) * L - 0.55 * ax * W ) / ( L * 0.8 / 5.5 ) + fseed * 0.37;
-		let rib = smoothstep( 0.1, 0.0, abs( fract( p ) - 0.5 ) ) * step( 0.16, y );
+		let rib = (1.0 - smoothstep(0.0, 0.1, abs( fract( p ) - 0.5 ) )) * step( 0.16, y );
 		c = c * ( 1.0 + rib * 0.12 );
-		c = mix( c, ${ C( 0x80994a ) }, smoothstep( 0.03, 0.0, ax * W ) * 0.7 );
+		c = mix( c, ${ C( 0x80994a ) }, (1.0 - smoothstep(0.0, 0.03, ax * W )) * 0.7 );
 	} else if ( part < 7.5 ) {
 		// elephant ear: mid green, pale veins radiating from where the petiole joins
 		var g = mix( ${ C( 0x33581e ) }, ${ C( 0x4a7128 ) }, iv * 0.6 + fr * 0.4 );
 		g = mix( g, ${ C( 0x98913f ) }, smoothstep( 0.85, 0.97, age ) * ( 0.6 + 0.4 * n1 ) );
 		let ang = atan2( ax * W, ( y - 0.3 ) * W / 0.4 );
-		let vein = smoothstep( 0.1, 0.0, abs( fract( ang * 2.6 ) - 0.5 ) - 0.38 ) * 0.7;
+		let vein = (1.0 - smoothstep(0.0, 0.1, abs( fract( ang * 2.6 ) - 0.5 ) - 0.38 )) * 0.7;
 		c = g * ( n1 * 0.14 + 0.93 );
-		c = mix( c, ${ C( 0x7f9658 ) }, vein * 0.35 + smoothstep( 0.025, 0.0, ax * W ) * step( 0.3, y ) * 0.5 );
+		c = mix( c, ${ C( 0x7f9658 ) }, vein * 0.35 + (1.0 - smoothstep(0.0, 0.025, ax * W )) * step( 0.3, y ) * 0.5 );
 	} else if ( part > 10.5 ) {
 		// bird of paradise flower: beak green-grey with a purple-red keel, orange sepals, blue tongue
 		let beak = mix( mix( ${ C( 0x5b6b4a ) }, ${ C( 0x6b2f3a ) }, smoothstep( 0.3, 0.9, ax ) * 0.7 ), ${ C( 0xc0703a ) }, smoothstep( 0.8, 1.0, y ) * 0.4 );
@@ -218,12 +218,12 @@ fn vegBroadAlbedo( part: f32, y: f32, x: f32, age: f32, W: f32, fseed: f32, seed
 		var g = mix( ${ C( 0x3e5a36 ) }, ${ C( 0x4f6a43 ) }, iv * 0.6 + fr * 0.4 );
 		g = mix( g, ${ C( 0x8f8a4a ) }, smoothstep( 0.8, 0.95, age ) );
 		c = g * ( n1 * 0.1 + 0.95 );
-		c = mix( c, ${ C( 0xa3a878 ) }, smoothstep( 0.015, 0.0, ax * W ) * 0.6 );
+		c = mix( c, ${ C( 0xa3a878 ) }, (1.0 - smoothstep(0.0, 0.015, ax * W )) * 0.6 );
 	} else if ( part < 8.5 ) {
 		var g = mix( ${ C( 0x365d20 ) }, ${ C( 0x4b7229 ) }, iv * 0.6 + fr * 0.4 );
 		g = mix( g, ${ C( 0x8f8a3a ) }, smoothstep( 0.8, 0.95, age ) );
 		c = g * ( ( sin( y * 180.0 + ax * 30.0 ) * 0.5 + 0.5 ) * 0.06 + 0.95 ) * ( n1 * 0.12 + 0.94 );
-		c = mix( c, ${ C( 0xaab86e ) }, smoothstep( 0.02, 0.0, ax * W ) * 0.7 );
+		c = mix( c, ${ C( 0xaab86e ) }, (1.0 - smoothstep(0.0, 0.02, ax * W )) * 0.7 );
 	} else {
 		// heliconia bract: scarlet, yellow lip, green tip on the youngest (top) bracts
 		c = mix( ${ C( 0x8e1a12 ) }, ${ C( 0xbd2a1a ) }, n1 * 0.6 + fr * 0.4 );
@@ -236,7 +236,7 @@ fn vegBroadAlbedo( part: f32, y: f32, x: f32, age: f32, W: f32, fseed: f32, seed
 	c = mix( c, mix( ${ C( 0x7b6639 ) }, ${ C( 0x5a4528 ) }, n2 ), sat( edge ) * 0.85 );
 	let spot = vegNoise( vec2f( y * 14.0 + fseed * 9.0, x * 6.0 + seed * 3.0 ) );
 	c = mix( c, ${ C( 0x5e5433 ) }, smoothstep( 0.86, 0.93, spot ) * 0.5 * ( 0.4 + age ) );
-	c = mix( c, ${ C( 0x6c5c45 ) }, smoothstep( 0.55, 0.0, hGround ) * smoothstep( 0.5, 0.75, n2 ) * 0.5 );
+	c = mix( c, ${ C( 0x6c5c45 ) }, (1.0 - smoothstep(0.0, 0.55, hGround )) * smoothstep( 0.5, 0.75, n2 ) * 0.5 );
 	// dead leaves: brown and papery
 	c = mix( c, mix( ${ C( 0x6e5634 ) }, ${ C( 0x8f7a4e ) }, n1 ), smoothstep( 0.93, 0.99, age ) );
 	return c;
@@ -353,7 +353,7 @@ fn vegPlantAlbedo( in: FragInput ) -> vec3f {
 			let streakS = vegNoise( vec2f( a * 24.0, y * 0.35 + seed * 7.0 ) );
 			green = mix( ${ C( 0x4e6a2a ) }, ${ C( 0x6b8438 ) }, streakS * 0.7 + fiss * 0.3 );
 			green = mix( green, ${ C( 0x3b3322 ) }, smoothstep( 0.62, 0.82, blotch ) * 0.55 );
-			green = mix( green, mix( ${ C( 0x6e5534 ) }, ${ C( 0x8f7a52 ) }, fiss ), smoothstep( 0.55, 0.75, streakS ) * smoothstep( 1.1, 0.3, y ) );
+			green = mix( green, mix( ${ C( 0x6e5534 ) }, ${ C( 0x8f7a52 ) }, fiss ), smoothstep( 0.55, 0.75, streakS ) * (1.0 - smoothstep(0.3, 1.1, y )) );
 		}
 		col = mix( bark, green, age );
 	} else if ( part < 1.5 ) {
@@ -399,7 +399,7 @@ fn vegPlantAlbedo( in: FragInput ) -> vec3f {
 			let blotch = vegNoise( vec2f( a * 9.0, f * 6.0 + fseed * 13.0 ) );
 			var gS = mix( ${ C( 0x55672e ) }, ${ C( 0x6e7d3a ) }, streakS * 0.7 + iv * 0.3 );
 			gS = mix( gS, ${ C( 0x3a2a28 ) }, smoothstep( 0.6, 0.8, blotch ) * 0.6 );
-			let dry = smoothstep( 0.45, 0.7, vegNoise( vec2f( a * 14.0 + 3.0, f * 2.5 + fseed * 19.0 ) ) ) * smoothstep( 0.8, 0.2, f );
+			let dry = smoothstep( 0.45, 0.7, vegNoise( vec2f( a * 14.0 + 3.0, f * 2.5 + fseed * 19.0 ) ) ) * (1.0 - smoothstep(0.2, 0.8, f ));
 			col = mix( gS, mix( ${ C( 0x6a5233 ) }, ${ C( 0x8e7a52 ) }, streakS ), dry * 0.9 );
 		} else {
 			// blade: muted green (per plant and leaf), paler midrib, faint lateral veins; dried, browned
@@ -410,7 +410,7 @@ fn vegPlantAlbedo( in: FragInput ) -> vec3f {
 			let vein = ( sin( s * 260.0 ) * 0.5 + 0.5 ) * 0.07;
 			let mott = vegNoise( vec2f( s * 11.0 + fseed * 3.0, t * 4.0 ) );
 			var c = base * ( vein + 0.94 ) * ( mott * 0.14 + 0.93 );
-			c = mix( c, ${ C( 0xa9b06e ) }, smoothstep( 0.05, 0.0, t ) * 0.75 ); // midrib
+			c = mix( c, ${ C( 0xa9b06e ) }, (1.0 - smoothstep(0.0, 0.05, t )) * 0.75 ); // midrib
 			let xs = s * 13.0 + sin( s * 31.0 + fseed * 10.0 ) * 0.35;
 			let stripEdge = smoothstep( 0.36, 0.47, abs( fract( xs ) - 0.5 ) ) * smoothstep( 0.4, 0.8, t ) * ( 0.3 + age );
 			let dryEdge = smoothstep( 0.72, 1.0, t + ( vegNoise( vec2f( s * 25.0, fseed * 4.0 ) ) - 0.5 ) * 0.3 ) * ( 0.45 + age * 0.8 );

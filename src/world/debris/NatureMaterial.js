@@ -61,7 +61,7 @@ fn debrisStoneSurface( T: vec4f, N: vec3f, pal: f32, style: f32, seed: f32, tile
 	let pits = smoothstep( 0.62, 0.85, T.b ) * smoothstep( 0.45, 0.8, pal );
 	col = mix( col, col * 0.55, pits * 0.6 );
 	// quartz veins / bands in a few of the dark stones
-	let vein = smoothstep( 0.03, 0.0, abs( fract( T.a * 7.0 + seed * 3.0 ) - 0.5 ) ) * step( debrisHashS( seed, 5.1 ), 0.25 ) * ( 1.0 - smoothstep( 0.3, 0.5, pal ) );
+	let vein = (1.0 - smoothstep(0.0, 0.03, abs( fract( T.a * 7.0 + seed * 3.0 ) - 0.5 ) )) * step( debrisHashS( seed, 5.1 ), 0.25 ) * ( 1.0 - smoothstep( 0.3, 0.5, pal ) );
 	col = mix( col, ${ srgb( 0.7, 0.68, 0.62 ) }, vein * 0.7 );
 	var rough = 0.74 + T.b * 0.12 - smoothstep( 0.0, 0.3, pal ) * 0.0;
 	// field / wall stones: lichen crusts on the upper faces, soil at the bottom
@@ -69,7 +69,7 @@ fn debrisStoneSurface( T: vec4f, N: vec3f, pal: f32, style: f32, seed: f32, tile
 	let lichen = smoothstep( 0.55, 0.68, T.a + N.y * 0.18 + debrisHashS( seed, 2.3 ) * 0.15 ) * s1;
 	let lichenCol = mix( ${ srgb( 0.62, 0.64, 0.55 ) }, ${ srgb( 0.72, 0.52, 0.2 ) }, step( 0.72, T.g ) );
 	col = mix( col, lichenCol, lichen * 0.75 );
-	col = mix( col, col * 0.62, smoothstep( 0.2, -0.6, N.y ) * s1 );
+	col = mix( col, col * 0.62, (1.0 - smoothstep(-0.6, 0.2, N.y )) * s1 );
 	// whitewashed stones: lime wash, worn through on edges and blotches
 	let s2 = step( 1.5, style );
 	let wash = smoothstep( 0.5, 0.58, T.a + ( T.r - 0.45 ) * 0.4 + debrisHashS( seed, 6.6 ) * 0.12 ) * s2;
@@ -202,8 +202,8 @@ const NATURE_SURFACE = /* wgsl */`
 		// driftwood: sun-bleached silver-grey with warmer, less weathered patches; open grain
 		// (dark wavy lines along the wood), deep checks, flaking bark remnants in the grooves
 		let bark = prm;
-		let lines = smoothstep( 0.06, 0.0, abs( fract( A.a * 3.0 + Cc.a ) - 0.5 ) );
-		let crack = smoothstep( 0.03, 0.0, abs( B.a - 0.5 ) ) * smoothstep( 0.35, 0.65, A.r );
+		let lines = (1.0 - smoothstep(0.0, 0.06, abs( fract( A.a * 3.0 + Cc.a ) - 0.5 ) ));
+		let crack = (1.0 - smoothstep(0.0, 0.03, abs( B.a - 0.5 ) )) * smoothstep( 0.35, 0.65, A.r );
 		var c = mix( ${ srgb( 0.63, 0.61, 0.57 ) }, ${ srgb( 0.83, 0.81, 0.77 ) }, smoothstep( 0.3, 0.7, Cc.a + ( A.a - 0.5 ) * 0.5 ) );
 		c = mix( c, ${ srgb( 0.66, 0.57, 0.46 ) }, smoothstep( 0.6, 0.8, Cc.g ) * 0.45 );
 		c = c * ( ( B.a - 0.5 ) * 0.5 + 1.0 ) * ( 1.0 - lines * 0.45 ) * ( 1.0 - crack * 0.75 );

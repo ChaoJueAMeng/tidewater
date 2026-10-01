@@ -422,8 +422,8 @@ fn underwaterComposite( uv: vec2f, pixel: vec2f ) -> vec4f {
 	}
 
 	// meniscus contact line and bright rim
-	let line = smoothstep( 2.0, 0.0, lineDist );
-	let rim = smoothstep( bandW, bandW * 0.4, lineDist ) * smoothstep( 0.5, 2.5, lineDist );
+	let line = (1.0 - smoothstep(0.0, 2.0, lineDist ));
+	let rim = (1.0 - smoothstep(bandW * 0.4, bandW, lineDist)) * smoothstep(0.5, 2.5, lineDist);
 	let withLine = result * ( 1.0 - line * 0.55 ) + rim * 0.15 * ( frame.skyIrradiance * 2.5 + frame.sunColor * 0.02 );
 	return vec4f( withLine, 1.0 );
 }

@@ -101,7 +101,7 @@ fn lensLayer( p: vec2f, cell: f32, rMin: f32, rMax: f32, density: f32, slide: bo
 				// wet streak above a sliding drop
 				let dxT = abs( p.x - center.x );
 				let above = center.y - p.y;
-				let tr = smoothstep( r * 0.45, 0.0, dxT ) * smoothstep( 0.0, 0.01, above ) * smoothstep( dy + 0.01, 0.0, above );
+				let tr = (1.0 - smoothstep(0.0, r * 0.45, dxT)) * smoothstep(0.0, 0.01, above) * (1.0 - smoothstep(0.0, dy + 0.01, above));
 				( *acc ).trail = max( ( *acc ).trail, tr * life );
 			}
 			// irregular outline: a few lobes, sliding drops stretched vertically
@@ -113,7 +113,7 @@ fn lensLayer( p: vec2f, cell: f32, rMin: f32, rMax: f32, density: f32, slide: bo
 			let wobble = 1.0 + sin( ang * 3.0 + h.x * 40.0 ) * 0.12 + sin( ang * 5.0 + h2.y * 30.0 ) * 0.06;
 			let q = d / max( r * wobble, 1e-4 );
 			let rq = dot( q, q );
-			let a = smoothstep( 1.0, 0.7, rq );
+			let a = (1.0 - smoothstep(0.7, 1.0, rq ));
 			if ( a > ( *acc ).cover ) {
 				( *acc ).n2 = q;
 				( *acc ).cover = a;
@@ -145,7 +145,7 @@ fn lensDroplets( uv: vec2f ) -> vec3f {
 			let off = n2 * -0.05 * ( 1.0 - nz * 0.5 );
 			let inside = lensBlurred( uv + vec2f( off.x / aspect, off.y ) );
 			let edge = smoothstep( 0.45, 1.0, r2 );
-			let highlight = smoothstep( 0.3, 0.0, length( n2 - vec2f( -0.3, -0.4 ) ) ) * 0.35;
+			let highlight = (1.0 - smoothstep(0.0, 0.3, length( n2 - vec2f( -0.3, -0.4 ) ) )) * 0.35;
 			let dropCol = inside * mix( 1.04, 0.7, edge ) + inside * highlight;
 			col = mix( col, dropCol, acc.cover );
 		}

@@ -260,11 +260,11 @@ fn critterLimbVertex( J: CritterJoints, seg: f32, t: f32, rs: f32, ring: vec2f, 
 		let damp = ${ srgb( 0.66, 0.58, 0.45 ) };
 		let clumps = smoothstep( 0.35, 0.55, mx_noise_float3( P * 38.0 + seed * 5.0 ) );
 		let sand = mix( mix( damp, dry, smoothstep( 0.4, 0.75, v ) ), dry * 1.06, clumps * 0.5 );
-		let hole = smoothstep( 0.36, 0.2, v );
+		let hole = (1.0 - smoothstep(0.2, 0.36, v ));
 		c = mix( sand, ${ srgb( 0.035, 0.03, 0.025 ) }, hole );
 		rough = 0.9;
 		// dithered fade at the outer edge (resolved by the temporal filter)
-		let fade = smoothstep( 1.0, 0.72, v );
+		let fade = (1.0 - smoothstep(0.72, 1.0, v ));
 		let noise = interleavedGradientNoise( in.pixel + fract( frame.time * 7.13 ) * 97.0 );
 		if ( noise > fade ) { discard; }
 

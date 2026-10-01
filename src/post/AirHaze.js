@@ -193,11 +193,15 @@ export class AirHaze {
 
 	// ---------------------------------------------------------------- WGSL
 
+	// base helpers (march/mask/temporal) only need camera rays, hill/cloud shadows and sun visibility:
+	// atmosphere sky LUT + moon + full cloud views are composite-only (hazeApply). Pulling them into
+	// every pass pushed march 17, mask 18, temporal 20 sampled >16. Use the 1-texture shadowModule
+	// for the passes; the composite adds the full modules back.
 	_deps() {
 
 		const hard = shadowModule.code.includes( 'fn sunShadowHard' ) ? shadowModule : hardShadowFallback;
-		return [ commonModule, this.uw.module, this.atmosphere && this.atmosphere.module, this.sky && this.sky.module,
-			this.clouds && this.clouds.module, this.terrain && this.terrain.module, hard ];
+		const cloudShadow = this.clouds && ( this.clouds.shadowModule || this.clouds.module );
+		return [ commonModule, this.uw.module, this.terrain && this.terrain.module, cloudShadow, hard ];
 
 	}
 
@@ -328,7 +332,8 @@ fn hazeVisibility( P: vec3f ) -> f32 {
 		if ( this._compositeModule ) return this._compositeModule;
 		this._compositeModule = new ShaderModule( {
 			name: 'haze-composite',
-			deps: [ this.module ],
+			deps: [ this.module, this.atmosphere && this.atmosphere.module, this.sky && this.sky.module,
+				this.clouds && this.clouds.module ],
 			bindings: {
 				hazeLow: { texture: () => this.hist[ this._hc ].texture },
 				hazeSS: { texture: () => this.ssShafts.texture },
@@ -491,9 +496,11 @@ fn fragment( in: FSIn ) -> vec4f {
 
 		// sources: sky pixels near the key light, weighted by the sun disc and its aureole, times the
 		// cloud transmittance in that direction
+		// mask needs the full cloud views (cloudsSampleView) not just the shadow: base only has the
+		// 1-texture shadowModule now, so add the full module here (shadow dedupes via sameSpec).
 		const mask = new FullscreenPass( {
 			label: 'haze sun mask',
-			modules: [ mod ],
+			modules: [ mod, this.clouds && this.clouds.module ],
 			defines,
 			colorFormats: [ 'r16float' ],
 			code: /* wgsl */`
@@ -519,7 +526,11 @@ fn fragment( in: FSIn ) -> vec4f {
 		} );
 
 		// one pass of the iterative radial blur toward the light: pass p spans 1 / 8^p of the way, so the
-		// three passes together sample the whole segment densely
+		// three passes together sample the whole segment densely.
+		// Slim module: the blur only reads hzSrc + hazeParams + common noise. Including the full
+		// haze module would bind ~20 unused textures (uw, atmosphere, sky, clouds, terrain,
+		// shadows) and exceed the 16 sampled textures per stage on some adapters.
+		const blurModule = new ShaderModule( { name: 'haze-blur', uniforms: this.uniforms, uniformName: 'hazeParams', code: '' } );
 		const blur = [ 0, 1, 2 ].map( ( p ) => {
 
 			const span = 0.95 / Math.pow( SS_TAPS, p );
@@ -535,7 +546,7 @@ fn fragment( in: FSIn ) -> vec4f {
 
 			return new FullscreenPass( {
 				label: 'haze god rays ' + p,
-				modules: [ mod ],
+				modules: [ blurModule ],
 				bindings: { hzSrc: { texture: () => this.ssTargets[ p ].texture } },
 				colorFormats: [ 'r16float' ],
 				code: /* wgsl */`

@@ -108,7 +108,7 @@ fn fishVnoise( p: vec2f ) -> f32 {
 
 // posterior edge of the gill cover (local z) at height fraction h: convex backward, sweeping
 // forward under the throat
-fn fishOpercleEdge( zOp: f32, h: f32 ) -> f32 { return zOp - 0.028 * ( 1.0 - h * h ) + smoothstep( -0.35, -1.0, h ) * 0.07; }
+fn fishOpercleEdge( zOp: f32, h: f32 ) -> f32 { return zOp - 0.028 * ( 1.0 - h * h ) + (1.0 - smoothstep(-1.0, -0.35, h )) * 0.07; }
 fn fishOpercleMask( h: f32 ) -> f32 { return smoothstep( -0.98, -0.9, h ) * ( 1.0 - smoothstep( 0.45, 0.62, h ) ); }
 
 fn fishBand( x: f32, center: f32, width: f32, soft: f32 ) -> f32 { return 1.0 - smoothstep( width, width + soft, abs( x - center ) ); }
@@ -396,7 +396,7 @@ function surface( prop, lodFade ) {
 		c = mix( c, lineC, stripe * select( 0.7, 0.9, blue ) );
 	} else if ( pat == ${ PT( 'yellowtail' ) } ) {
 		// yellow stripe from the snout widening into the yellow tail; yellow spots on the back
-		let wS = mix( 0.006, 0.035, smoothstep( 0.1, -0.25, z ) );
+		let wS = mix( 0.006, 0.035, (1.0 - smoothstep(-0.25, 0.1, z )) );
 		let stripe = fishBand( y - 0.004, 0.0, wS, 0.004 ) * bodyK;
 		let qq = vec2f( z, y ) * 70.0;
 		let cell = floor( qq );
@@ -424,7 +424,7 @@ function surface( prop, lodFade ) {
 	} else if ( pat == ${ PT( 'wrasse' ) } ) {
 		// bluehead wrasse: yellow initial phase with a dark midlateral stripe; blue-headed males
 		let male = fract( seed * 7.1 ) < 0.15;
-		let stripe = fishBand( h, 0.05, 0.1, fwH + 0.04 ) * bodyK * smoothstep( 0.25, 0.1, z );
+		let stripe = fishBand( h, 0.05, 0.1, fwH + 0.04 ) * bodyK * (1.0 - smoothstep(0.1, 0.25, z ));
 		let female = mix( c, vec3f( 0.04, 0.04, 0.03 ), stripe * 0.9 );
 		let head = smoothstep( 0.12, 0.17, z );
 		let collar = fishBand( z, 0.13, 0.012, 0.006 );
@@ -453,7 +453,7 @@ function surface( prop, lodFade ) {
 		// dark oblique bars on the upper flank, black blotches on the lower rear flank
 		let bars = smoothstep( 0.35, 0.8, sin( z * 58.0 + h * 1.5 + n1 ) ) * smoothstep( 0.2, 0.55, h ) * bodyK;
 		c *= 1.0 - bars * 0.45;
-		let bl = smoothstep( 0.6, 0.78, n2 ) * smoothstep( 0.1, -0.25, z ) * ( 1.0 - smoothstep( -0.3, 0.2, h ) ) * bodyK;
+		let bl = smoothstep( 0.6, 0.78, n2 ) * (1.0 - smoothstep(-0.25, 0.1, z )) * ( 1.0 - smoothstep( -0.3, 0.2, h ) ) * bodyK;
 		c = mix( c, vec3f( 0.03, 0.03, 0.035 ), bl * 0.9 );
 		c = mix( c, vec3f( 0.75, 0.78, 0.8 ), select( 0.0, smoothstep( 0.85, 1.0, t ) * smoothstep( 5.0, 7.0, abs( w - 8.0 ) ), P == ${ PA( 'CAUDAL' ) } ) );
 	} else if ( pat == ${ PT( 'redSnapper' ) } ) {
@@ -465,8 +465,8 @@ function surface( prop, lodFade ) {
 		// on the tail stalk, dark spots around the eye
 		let zz = 0.5 - z;
 		let wob = ( n2 - 0.5 ) * 0.03;
-		let bars = smoothstep( 0.2, 0.6, sin( ( zz + wob ) * 34.0 - 1.2 ) ) * smoothstep( 0.3, 0.38, zz ) * smoothstep( 0.86, 0.78, zz ) * ( 1.0 - tBelly * 0.85 );
-		let stripe = fishBand( y - eye.y - ( z - eye.x ) * 0.25, 0.0, 0.008, 0.006 ) * smoothstep( eye.x - 0.08, eye.x, z ) * smoothstep( 0.5, 0.45, z );
+		let bars = smoothstep( 0.2, 0.6, sin( ( zz + wob ) * 34.0 - 1.2 ) ) * smoothstep( 0.3, 0.38, zz ) * (1.0 - smoothstep(0.78, 0.86, zz )) * ( 1.0 - tBelly * 0.85 );
+		let stripe = fishBand( y - eye.y - ( z - eye.x ) * 0.25, 0.0, 0.008, 0.006 ) * smoothstep( eye.x - 0.08, eye.x, z ) * (1.0 - smoothstep(0.45, 0.5, z ));
 		let saddle = smoothstep( 0.4, 0.7, h ) * fishBand( zz, 0.8, 0.025, 0.01 );
 		let spots = smoothstep( 0.72, 0.85, fishVnoise( vec2f( z, y ) * 160.0 + seed * 3.0 ) ) * smoothstep( eye.x - 0.12, eye.x, z );
 		let dark = max( max( bars * 0.85, stripe * 0.85 ), max( saddle, spots * 0.7 ) ) * bodyK;
@@ -475,10 +475,10 @@ function surface( prop, lodFade ) {
 		c = mix( c, vec3f( 0.85, 0.8, 0.72 ), pale );
 	} else if ( pat == ${ PT( 'tuna' ) } ) {
 		// blackfin tuna: sharp dark back, bronze band, pale bars on the belly, dusky yellow finlets
-		let bronze = fishBand( h, 0.28, 0.05, fwH + 0.06 ) * smoothstep( 0.3, 0.2, z ) * bodyK;
+		let bronze = fishBand( h, 0.28, 0.05, fwH + 0.06 ) * (1.0 - smoothstep(0.2, 0.3, z )) * bodyK;
 		c = mix( c, vec3f( 0.42, 0.34, 0.14 ), bronze * 0.6 );
 		c = mix( c, back, smoothstep( 0.28, 0.4, h ) * bodyK );
-		let bars = smoothstep( 0.6, 0.9, sin( z * 95.0 ) ) * smoothstep( 0.0, -0.3, h ) * smoothstep( 0.2, 0.1, z ) * bodyK;
+		let bars = smoothstep( 0.6, 0.9, sin( z * 95.0 ) ) * (1.0 - smoothstep(-0.3, 0.0, h )) * (1.0 - smoothstep(0.1, 0.2, z )) * bodyK;
 		c = mix( c, vec3f( 0.85, 0.88, 0.9 ), bars * 0.35 );
 		c = mix( c, vec3f( 0.55, 0.48, 0.16 ), select( 0.0, 0.85, P == ${ PA( 'FINLET' ) } ) );
 	} else if ( pat == ${ PT( 'mahi' ) } ) {
@@ -502,11 +502,11 @@ function surface( prop, lodFade ) {
 	} else if ( pat == ${ PT( 'jack' ) } ) {
 		// bar jack: black stripe along the base of the dorsal fin into the lower tail lobe,
 		// electric blue below it
-		let top = fishBand( h, 0.82, 0.06, fwH + 0.05 ) * smoothstep( 0.2, 0.05, z ) * bodyK;
-		let blue = fishBand( h, 0.68, 0.05, fwH + 0.05 ) * smoothstep( 0.2, 0.05, z ) * bodyK;
+		let top = fishBand( h, 0.82, 0.06, fwH + 0.05 ) * (1.0 - smoothstep(0.05, 0.2, z )) * bodyK;
+		let blue = fishBand( h, 0.68, 0.05, fwH + 0.05 ) * (1.0 - smoothstep(0.05, 0.2, z )) * bodyK;
 		c = mix( c, vec3f( 0.15, 0.45, 0.9 ), blue * 0.5 );
 		c = mix( c, vec3f( 0.02, 0.03, 0.05 ), top * 0.85 );
-		let lobe = select( 0.0, smoothstep( 7.5, 5.5, w ) * smoothstep( 0.1, 0.3, t ), P == ${ PA( 'CAUDAL' ) } );
+		let lobe = select( 0.0, (1.0 - smoothstep(5.5, 7.5, w )) * smoothstep( 0.1, 0.3, t ), P == ${ PA( 'CAUDAL' ) } );
 		c = mix( c, vec3f( 0.02, 0.03, 0.05 ), lobe * 0.8 );
 	} else if ( pat == ${ PT( 'tarpon' ) } ) {
 		// huge scales with dark edges
@@ -516,7 +516,7 @@ function surface( prop, lodFade ) {
 
 	// ---- lateral line (a row of pores along a dark line)
 	let hl = lat.x + lat.y * ( 1.0 - smoothstep( 0.12, 0.55, u ) );
-	let lineK = fishBand( h, hl, fwH * 0.5 + 0.012, fwH + 0.008 ) * bodyK * smoothstep( 0.18, 0.25, u ) * smoothstep( 0.9, 0.8, u );
+	let lineK = fishBand( h, hl, fwH * 0.5 + 0.012, fwH + 0.008 ) * bodyK * smoothstep( 0.18, 0.25, u ) * (1.0 - smoothstep(0.8, 0.9, u ));
 	c *= 1.0 - lineK * 0.3;
 
 	// ---- gill cover edge and the preopercle (dark creases); gills show red on dead fish
@@ -525,9 +525,9 @@ function surface( prop, lodFade ) {
 	let onOp = fishOpercleMask( h ) * bodyK;
 	let crease = ( 1.0 - smoothstep( 0.0015, 0.004, abs( dOp ) ) ) * onOp;
 	c *= 1.0 - crease * 0.45;
-	let pre = ( 1.0 - smoothstep( 0.001, 0.003, abs( dOp - 0.04 ) ) ) * onOp * smoothstep( 0.6, 0.2, h );
+	let pre = ( 1.0 - smoothstep( 0.001, 0.003, abs( dOp - 0.04 ) ) ) * onOp * (1.0 - smoothstep(0.2, 0.6, h ));
 	c *= 1.0 - pre * 0.2;
-	let gill = smoothstep( 0.0, -0.0015, dOp ) * smoothstep( -0.007, -0.003, dOp ) * onOp * smoothstep( 0.0, -0.5, h ) * flags.w;
+	let gill = (1.0 - smoothstep(-0.0015, 0.0, dOp )) * smoothstep( -0.007, -0.003, dOp ) * onOp * (1.0 - smoothstep(-0.5, 0.0, h )) * flags.w;
 	c = mix( c, vec3f( 0.3, 0.03, 0.035 ), gill * 0.8 );
 
 	// ---- lips (the mouth line from the snout to the corner), the edge of the upper jaw bone
@@ -538,7 +538,7 @@ function surface( prop, lodFade ) {
 	let lips = ( 1.0 - smoothstep( 0.0015, 0.0035, abs( y - yLip ) ) ) * step( hz - 0.004, z ) * bodyK;
 	c *= 1.0 - lips * 0.55;
 	let maxZ = hz + 0.006 - ( y - hy ) * 0.35;
-	let maxilla = ( 1.0 - smoothstep( 0.001, 0.0025, abs( z - maxZ ) ) ) * smoothstep( hy - 0.002, hy + 0.002, y ) * smoothstep( hy + 0.04, hy + 0.025, y ) * bodyK;
+	let maxilla = (1.0 - smoothstep(0.001, 0.0025, abs(z - maxZ))) * smoothstep(hy - 0.002, hy + 0.002, y) * (1.0 - smoothstep(hy + 0.025, hy + 0.04, y)) * bodyK;
 	c *= 1.0 - maxilla * 0.3;
 	let nostril = ( 1.0 - smoothstep( 0.1, 0.2, length( vec2f( z - eye.x - eye.z * 1.7, y - eye.y - eye.z * 0.25 ) ) / eye.z ) ) * bodyK;
 	c *= 1.0 - nostril * 0.6;

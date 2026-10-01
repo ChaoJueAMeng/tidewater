@@ -19,6 +19,13 @@ breach. It runs directly on WebGPU and WGSL with its own small rendering engine,
 - The first load compiles several hundred shaders, which can take a minute or more. Later visits are
   faster because the browser caches them.
 
+Shaders prune unused resources and split ocean compute work to fit lower WebGPU limits.
+On adapters limited to 16 sampled textures per shader stage, water uses the refreshed environment
+cube instead of the full atmosphere/cloud shader, omits cloud shadows and textured foam lace,
+and terrain omits environment specular. Analytic foam coverage and hull masking remain active.
+Higher-capability adapters retain the full paths. This improves compatibility, not a guarantee
+of the same frame rate on integrated GPUs.
+
 ## Features
 
 **Fishing**

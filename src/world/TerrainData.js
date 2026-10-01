@@ -238,7 +238,7 @@ export class TerrainData {
 					const rr = R * ( 1 + 0.2 * n.noise( ca * 1.3 + px, sa * 1.3 + pz ) + 0.08 * n2.noise( x / 17, z / 17 ) - flute );
 					const u = Math.sqrt( r2 ) / rr;
 					// sheer walls, a talus apron at the foot and a craggy crown
-					const wall = smoothstep( 1.0, 0.72, u );
+					const wall = (1.0 - smoothstep(0.72, 1.0, u ));
 					const apron = ( 1 - smoothstep( 0.9, 1.3, u ) ) * 0.12;
 					const crown = 1 - 0.35 * u * u + n2.ridged( x / 19, z / 19, 3 ) * 0.35 - 0.15;
 					m += H * ( wall * crown + apron );
@@ -510,7 +510,7 @@ export class TerrainData {
 				const u = Math.hypot( dx, dz ) / rr;
 				const k = j * res + i;
 				// column: near vertical faces, rounded shoulder, craggy top
-				const col = smoothstep( 1.0, 0.82, u );
+				const col = (1.0 - smoothstep(0.82, 1.0, u ));
 				const top = hgt * ( 1 - 0.25 * u * u ) + n2.ridged( x / 6, z / 6, 3 ) * 2.2;
 				const skirt = ( 1 - smoothstep( 0.9, 2.4, u ) ) * ( 1.6 + n2.ridged( x / 4, z / 4, 2 ) * 1.4 );
 				const base = H[ k ];

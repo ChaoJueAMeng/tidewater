@@ -82,7 +82,7 @@ fn shoreSimUvOf( xz: vec2f ) -> vec2f {
 }
 
 fn shoreSimInside( uv: vec2f ) -> f32 {
-	return smoothstep( 0.0, 0.02, uv.x ) * smoothstep( 1.0, 0.98, uv.x ) * smoothstep( 0.0, 0.02, uv.y ) * smoothstep( 1.0, 0.98, uv.y );
+	return smoothstep( 0.0, 0.02, uv.x ) * (1.0 - smoothstep(0.98, 1.0, uv.x )) * smoothstep( 0.0, 0.02, uv.y ) * (1.0 - smoothstep(0.98, 1.0, uv.y ));
 }
 
 // bilinear state at texture coordinate uv, from 4 loads
@@ -138,7 +138,7 @@ fn shoreSimSandFoam( xz: vec2f, s: vec4f, h: f32 ) -> f32 {
 	if ( r > 0.01 ) {
 		let lace = shoreSimLaceLoad( xz + 11.3 );
 		// fade to the average where a pixel covers several strands (no mipmaps on the load path)
-		let near = smoothstep( 3.0, 1.2, fp );
+		let near = (1.0 - smoothstep(1.2, 3.0, fp ));
 		let keep = smoothstep( lace.w * 0.55, lace.w * 0.55 + 0.08, r ); // staggered popping
 		// thin bubble lines where the strands were, a little wider where more foam was left
 		let lw = r * 0.1 + 0.06;
@@ -218,7 +218,7 @@ fn main( @builtin( global_invocation_id ) gid: vec3u ) {
 	// into the sand once the water has gone
 	let mott = textureSampleLevel( shoreSimLace, smpLinearRepeat, p / ( SHORE_SIM_LACE_TILE * 4.3 ), 2.0 ).z;
 	let patchK = smoothstep( 0.25, 0.75, mott ) * 0.8 + 0.35;
-	let swashy = smoothstep( 0.35, 0.05, depth );
+	let swashy = (1.0 - smoothstep(0.05, 0.35, depth ));
 	// dense foam collapses within a second or two (big bubbles burst first), the lace it leaves lingers
 	let lace = mix( shoreSimP.surfFoamLife, shoreSimP.foamLife, swashy );
 	let life = mix( 0.7, mix( lace, 0.8, smoothstep( 0.3, 0.8, prev.x ) ), cov );

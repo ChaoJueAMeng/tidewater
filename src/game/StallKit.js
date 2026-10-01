@@ -147,6 +147,7 @@ export function createStallMaterial( assets ) {
 
 	const m = standard( {
 		vertexColors: true,
+		underwaterLighting: 'none',
 		modules: [ kitModule ],
 		attributes: { aLayer: 'f32', aUV2: 'vec2f' },
 		varyings: { vLayer: 'f32', vUV2: 'vec2f' },
@@ -207,7 +208,7 @@ export function createStallMaterial( assets ) {
 		// as the village lanterns do (the stall's local light switches on over the same range, App)
 		if ( abs( L - 107.0 ) < 0.5 ) {
 			let lum = dot( a.rgb, vec3f( 0.3, 0.55, 0.15 ) );
-			let pane = smoothstep( 0.32, 0.16, lum ); // the dark panes, not the frame rims
+			let pane = (1.0 - smoothstep(0.16, 0.32, lum )); // the dark panes, not the frame rims
 			let nightOn = smoothstep( 0.15, 0.75, frame.night );
 			let flicker = sin( frame.time * 9.0 + P.x * 40.0 ) * sin( frame.time * 5.3 + P.z * 13.0 ) * 0.12 + 0.9;
 			// lit from inside: the flame shows through the soot, brighter in the middle of each pane

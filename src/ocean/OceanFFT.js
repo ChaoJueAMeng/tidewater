@@ -1,6 +1,7 @@
 import { Vector4, MathUtils } from '../engine/index.js';
 import { GPU, UniformBlock, Texture, StorageBuffer, ShaderModule, ComputeKernel, GRAVITY } from '../engine/webgpu.js';
 import { commonModule } from '../engine/render/wgsl/common.js';
+import { ComputeMips } from './ComputeMips.js';
 
 // Multi-cascade FFT ocean (Tessendorf) with a Horvath/JONSWAP spectrum.
 //
@@ -602,8 +603,23 @@ ${ reduce( 's7', null, 1, 8, t ) }
 }`,
 		} );
 
-		this.mipKernelsA = [ mipA( this.displacementTexture, 0 ), mipA( this.derivativeTexture, 1 ) ];
-		this.mipKernelsB = [ mipB( this.displacementTexture, 0 ), mipB( this.derivativeTexture, 1 ) ];
+		// Low-limit adapters (Iris Xe: 4 storage/stage): custom mipA needs 5 (out1..5) and its layout
+		// fails validation at creation time, even if never dispatched. So only build the fast path
+		// when it fits; otherwise use per-level ComputeMips chains (1 storage/dispatch, always fits).
+		const lowST = ( GPU.limits?.maxStorageTexturesPerShaderStage ?? 8 ) < 5;
+		if ( lowST ) {
+
+			this.mipChains = [ new ComputeMips( this.displacementTexture, 'Ocean Displacement Mips' ), new ComputeMips( this.derivativeTexture, 'Ocean Derivatives Mips' ) ];
+			this.mipKernelsA = [];
+			this.mipKernelsB = [];
+
+		} else {
+
+			this.mipChains = [];
+			this.mipKernelsA = [ mipA( this.displacementTexture, 0 ), mipA( this.derivativeTexture, 1 ) ];
+			this.mipKernelsB = [ mipB( this.displacementTexture, 0 ), mipB( this.derivativeTexture, 1 ) ];
+
+		}
 
 	}
 
@@ -622,12 +638,20 @@ ${ reduce( 's7', null, 1, 8, t ) }
 		}
 
 		this.time.value += dt * this.timeScale;
+		// low-limit adapters (Iris Xe: 4 storage textures/stage): the fast mipA needs 5, so use the
+		// per-level ComputeMips chains instead (1 sampled + 1 storage per dispatch, always fits).
+		const lowST = ( GPU.limits?.maxStorageTexturesPerShaderStage ?? 8 ) < 5;
 		GPU.computePass( 'Ocean FFT', ( pass ) => {
 
 			this.rowKernel.dispatch( [ N, C, 1 ], { pass } );
 			this.columnKernel.dispatch( [ N, C, 1 ], { pass } );
-			for ( const k of this.mipKernelsA ) k.dispatch( [ N / 32, N / 32, C ], { pass } );
-			for ( const k of this.mipKernelsB ) k.dispatch( [ 1, 1, C ], { pass } );
+			if ( lowST ) { for ( const m of this.mipChains ) m.dispatch( pass ); }
+			else {
+
+				for ( const k of this.mipKernelsA ) k.dispatch( [ N / 32, N / 32, C ], { pass } );
+				for ( const k of this.mipKernelsB ) k.dispatch( [ 1, 1, C ], { pass } );
+
+			}
 
 		} );
 

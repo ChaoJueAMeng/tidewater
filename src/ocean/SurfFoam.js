@@ -345,7 +345,7 @@ fn surfFoamShading( a: SurfFoamArgs ) -> SurfFoamInfo {
 	var thinPat = 0.0; var thinK = 0.0;
 	var bubPat = 0.0; var bubK = 0.0;
 	// surf look near the beach, the default whitecap look offshore
-	let surf = smoothstep( 7.0, 3.0, a.depth ) * shoreSimInside( shoreSimUvOf( xz ) );
+	let surf = (1.0 - smoothstep(3.0, 7.0, a.depth )) * shoreSimInside( shoreSimUvOf( xz ) );
 	if ( surf > 0.0 && coverage > 0.04 ) {
 
 		// flow of the water here, from the shore simulation (along the local wave direction)
@@ -357,7 +357,7 @@ fn surfFoamShading( a: SurfFoamArgs ) -> SurfFoamInfo {
 		// (along the crest x height) rolling down the face with the roller
 		// (from the normal of the wave itself: steep ripple facets must not switch the projection,
 		// that drew combs of vertical streaks into the foam on flat water and on the swash)
-		let steep = smoothstep( 0.82, 0.5, a.baseNormal.y );
+		let steep = (1.0 - smoothstep(0.5, 0.82, a.baseNormal.y ));
 		let ww = sat( a.fresh * 1.4 );
 		// far pixels (a lace cell under a few pixels) only use the pattern's average (see "far" below):
 		// skip the lace and whitewater lump lookups there

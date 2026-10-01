@@ -516,7 +516,7 @@ export function group0ForBlock( block, stage = 'render' ) {
 // Assemble a full WGSL source: structs, group 0/1 declarations, module code, main code.
 //   modules: ShaderModule[]; bindings: extra { name: spec } (material resources); code: main WGSL
 // returns { code, bindings: BindingSet (group 1), group0: BindingSet }
-export function composeShader( { modules = [], bindings = {}, code = '', defines = {}, stage = 'render', label = 'shader', header = '' } ) {
+export function composeShader( { modules = [], bindings = {}, code = '', defines = {}, stage = 'render', label = 'shader', header = '', entry = 'main' } ) {
 
 	const mods = collectModules( modules );
 	const specs = {};
@@ -530,15 +530,40 @@ export function composeShader( { modules = [], bindings = {}, code = '', defines
 	for ( const k in bindings ) specs[ k ] = bindings[ k ];
 	let stageOf = null;
 	let demote = null;
-	if ( stage === 'render' && /@vertex\s+fn\s+vs\b/.test( code ) ) {
+	let filteredBody = null;
+	if ( stage === 'compute' ) {
+
+		// compute prune: drop bindings no entry reaches (Underwater Light Map was 17>16 via dead
+		// clouds). Tree-shake dead fns too so pruned globals aren't referenced by dead code.
+		let all = '';
+		for ( const m of mods ) all += m.code + '\n';
+		const full = preprocess( all + code, defines );
+		const bare = stripComments( full );
+		const used = reachableIdentifiers( bare, entry );
+		for ( const k in specs ) if ( ! used.has( k ) ) delete specs[ k ];
+		filteredBody = filterCode( full, reachableFunctions( bare, entry ) );
+
+	} else if ( stage === 'render' && /@vertex\s+fn\s+vs\b/.test( code ) ) {
 
 		// bindings only one entry point can reach are declared for that stage only (per-stage limits:
 		// 12 uniform buffers, 16 sampled textures on some adapters)
 		let all = '';
 		for ( const m of mods ) all += m.code + '\n';
 		const full = preprocess( all + code, defines );
-		const usedV = reachableIdentifiers( full, 'vs' );
-		const usedF = /@fragment\s+fn\s+fs\b/.test( full ) ? reachableIdentifiers( full, 'fs' ) : null;
+		const bare = stripComments( full );
+		const usedV = reachableIdentifiers( bare, 'vs' );
+		const usedF = /@fragment\s+fn\s+fs\b/.test( bare ) ? reachableIdentifiers( bare, 'fs' ) : null;
+		// prune dead bindings entirely (shared modules pull 19-31 textures; only 16 fit). Safe
+		// because dead fns referencing them are tree-shaken below (WGSL validates all fns).
+		for ( const k in specs ) if ( ! usedV.has( k ) && ( ! usedF || ! usedF.has( k ) ) ) delete specs[ k ];
+		// tree-shake dead module fns so pruned globals aren't referenced by dead code
+		{
+
+			const keep = reachableFunctions( bare, 'vs' );
+			if ( usedF ) for ( const f of reachableFunctions( bare, 'fs' ) ) keep.add( f );
+			filteredBody = filterCode( full, keep );
+
+		}
 		stageOf = {};
 		for ( const k in specs ) {
 
@@ -588,9 +613,101 @@ export function composeShader( { modules = [], bindings = {}, code = '', defines
 	src += structs.map( ( s ) => s.wgsl ).join( '\n' ) + '\n';
 	src += g0.declarations( 0 ) + '\n';
 	src += set.declarations( 1 ) + '\n';
-	for ( const m of mods ) src += `// ---- ${ m.name }\n${ m.code }\n`;
-	src += code;
+	if ( filteredBody !== null ) src += filteredBody + '\n';
+	else { for ( const m of mods ) src += `// ---- ${ m.name }\n${ m.code }\n`; src += code; }
 	return { code: preprocess( src, defines ), bindings: set, group0: g0, modules: mods };
+
+}
+
+// Mask comments for reachability while retaining source offsets for filterCode.
+// Note: URLs (https://) contain // — only mask // with start-of-line or whitespace before.
+export function stripComments( code ) {
+
+	const mask = ( s ) => s.replace( /[^\n]/g, ' ' );
+	return code.replace( /\/\*[\s\S]*?\*\//g, mask ).replace( /(^|[ \t])\/\/[^\n]*/g, mask );
+
+}
+
+// Function names reachable from `entry` (call graph only, for tree-shaking dead module code).
+// WGSL has no indirect calls, so dropping unreachable top-level `fn`s is safe. Preprocess first
+// so #if branches are already resolved.
+export function reachableFunctions( code, entry ) {
+
+	const fns = new Map();
+	const re = /\bfn\s+([A-Za-z_]\w*)\s*\(/g;
+	let m;
+	while ( ( m = re.exec( code ) ) ) {
+
+		const open = code.indexOf( '{', m.index );
+		if ( open < 0 ) break;
+		let depth = 0, i = open;
+		for ( ; i < code.length; i ++ ) {
+
+			const c = code[ i ];
+			if ( c === '{' ) depth ++;
+			else if ( c === '}' && -- depth === 0 ) break;
+
+		}
+		const isEntry = /@(vertex|fragment|compute)[^;{}]*$/.test( code.slice( Math.max( 0, m.index - 80 ), m.index ) );
+		if ( ! isEntry || m[ 1 ] === entry ) fns.set( m[ 1 ], code.slice( m.index, i + 1 ) );
+		re.lastIndex = i + 1;
+
+	}
+	const keep = new Set( [ entry ] );
+	const queue = [ entry ];
+	while ( queue.length ) {
+
+		const f = queue.pop();
+		const body = fns.get( f );
+		if ( ! body ) continue;
+		for ( const id of body.match( /[A-Za-z_]\w*/g ) || [] ) {
+
+			if ( fns.has( id ) && ! keep.has( id ) ) { keep.add( id ); queue.push( id ); }
+
+		}
+
+	}
+	return keep;
+
+}
+
+// Drop top-level `fn`s not in `keep`; preserve everything else (structs, consts, globals).
+// Operates on preprocessed code (no #if left). Entry points with other names are dropped too.
+export function filterCode( code, keep ) {
+
+	const bare = stripComments( code );
+	const ranges = [];
+	const re = /\bfn\s+([A-Za-z_]\w*)\s*\(/g;
+	let m;
+	while ( ( m = re.exec( bare ) ) ) {
+
+		const open = bare.indexOf( '{', m.index );
+		if ( open < 0 ) break;
+		let depth = 0, i = open;
+		for ( ; i < bare.length; i ++ ) {
+
+			const c = bare[ i ];
+			if ( c === '{' ) depth ++;
+			else if ( c === '}' && -- depth === 0 ) break;
+
+		}
+		const attrs = /(?:@\w+(?:\([^)]*\))?\s*)+$/.exec( bare.slice( 0, m.index ) );
+		ranges.push( { name: m[ 1 ], start: attrs ? m.index - attrs[ 0 ].length : m.index, end: i + 1 } );
+		re.lastIndex = i + 1;
+
+	}
+	if ( ! ranges.length ) return code;
+	let out = '';
+	let pos = 0;
+	for ( const r of ranges ) {
+
+		out += code.slice( pos, r.start );
+		if ( keep.has( r.name ) ) out += code.slice( r.start, r.end );
+		pos = r.end;
+
+	}
+	out += code.slice( pos );
+	return out;
 
 }
 
