@@ -94,7 +94,7 @@ ${ sway }	p += vec3f( sway.x, sway.y * 0.5, sway.z ) * 0.8;
 	let pv0 = frame.view * vec4f( p, 1.0 );
 	// fade in the box edges and right in front of the lens (by shrinking)
 	let dist = length( local );
-	var fade = smoothstep( B * 0.5, B * 0.3, dist ) * smoothstep( 0.08, 0.3, - pv0.z );
+	var fade = (1.0 - smoothstep(B * 0.3, B * 0.5, dist)) * smoothstep(0.08, 0.3, -pv0.z);
 ${ query && query.module ? '\tfade *= smoothstep( 0.0, 0.04, waterQueryHeightAtXZ( p.xz ) - p.y );\n' : '' }	// (view-space offset: along the camera's right / up axes in world space)
 	let right = vec3f( frame.view[ 0 ][ 0 ], frame.view[ 1 ][ 0 ], frame.view[ 2 ][ 0 ] );
 	let up = vec3f( frame.view[ 0 ][ 1 ], frame.view[ 1 ][ 1 ], frame.view[ 2 ][ 1 ] );

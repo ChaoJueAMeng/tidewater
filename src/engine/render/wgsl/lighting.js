@@ -50,11 +50,14 @@ const HOOK_DEFAULTS = {
 };
 
 // stub modules for hooks nobody installed
-export function hookModules() {
+// except: hook names forced to the procedural stub (no textures) for materials that don't
+// need them, e.g. rough-dielectric Terrain skipping envSpecular (cube) to fit 16/stage.
+export function hookModules( except = [] ) {
 
 	const out = [];
 	for ( const k in HOOK_DEFAULTS ) {
 
+		if ( except.includes( k ) ) { out.push( stub( k ) ); continue; }
 		const m = SceneLighting.hooks[ k ];
 		if ( m ) out.push( m );
 		else out.push( stub( k ) );
@@ -370,7 +373,7 @@ fn studioEnvSpecular( R: vec3f, roughness: f32 ) -> vec3f {
 	let sweep = mix( vec3f( 0.035, 0.04, 0.045 ), vec3f( 0.55, 0.57, 0.6 ), smoothstep( -0.35, 0.85, R.y ) );
 	let az = atan2( R.x, R.z ) - frame.debug.x;
 	let w = 0.35 + roughness * 1.6;
-	let box = exp( - az * az / ( w * w ) ) * smoothstep( -0.05, 0.3, R.y ) * smoothstep( 0.98, 0.55, R.y );
+	let box = exp( - az * az / ( w * w ) ) * smoothstep( -0.05, 0.3, R.y ) * (1.0 - smoothstep(0.55, 0.98, R.y ));
 	return ( sweep + box * vec3f( 2.4, 2.35, 2.25 ) / ( 1.0 + roughness * 3.0 ) ) * frame.envIntensity;
 }
 fn studioEnvDiffuse( N: vec3f ) -> vec3f {

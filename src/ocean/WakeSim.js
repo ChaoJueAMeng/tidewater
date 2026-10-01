@@ -494,23 +494,23 @@ fn wakeCell( col: u32, row: u32 ) -> vec4f {
 	let time = frame.time;
 	let behind = ${ f( L.zAft ) } - bz;
 	let washW = max( behind, 0.0 ) * 0.1 + wk.washW;
-	let inWash = smoothstep( - 0.6, 0.3, behind ) * smoothstep( 7.0, 1.5, behind ) * smoothstep( washW, washW * 0.3, abs( bx ) );
+	let inWash = smoothstep(-0.6, 0.3, behind) * (1.0 - smoothstep(1.5, 7.0, behind)) * (1.0 - smoothstep(washW * 0.3, washW, abs(bx)));
 	let streak = wakeNoise( vec2f( bx * 1.7, time * 0.9 ) );
 	let patchN = wakeNoise( p * 0.45 + time * 0.13 );
 	// churning white right behind the transom (the propeller race), streaks and patches further aft
-	let race = smoothstep( 7.0, 0.0, behind ) * 0.9;
+	let race = (1.0 - smoothstep(0.0, 7.0, behind )) * 0.9;
 	// streaks: noise stretched along the track (fixed in the water), deposited with the wash so
 	// the band is laid down as long ragged streaks, not a uniform ribbon
 	let along = p.x * sn + p.y * cs; let across = p.x * cs - p.y * sn;
 	let streaks = wakeNoise( vec2f( along * 0.12, across * 0.9 ) ) * 0.7 + wakeNoise( vec2f( along * 0.3, across * 1.9 ) + 5.3 ) * 0.3;
 	let mottle = clamp( ( streaks - 0.5 ) * 3.2, - 0.85, 0.85 ) + 1.0;
-	let washGen = inWash * wk.wash * ( wk.speed + 1.5 ) * ( streak * patchN * 0.6 + race + 0.08 ) * mix( mottle, 1.0, smoothstep( 3.0, 0.0, behind ) * 0.7 );
+	let washGen = inWash * wk.wash * ( wk.speed + 1.5 ) * ( streak * patchN * 0.6 + race + 0.08 ) * mix( mottle, 1.0, (1.0 - smoothstep(0.0, 3.0, behind )) * 0.7 );
 
 	// bow: the spray thrown off the forward hull falls back in a band just outside the
 	// waterline (up to ~1.3 m out), where the bow wave rolls away from the hull
 	let outside = 1.0 - smoothstep( 0.0, 0.03, Ph );
 	let nearHull = smoothstep( 0.0, 0.03, wakeImmersionAt( max( abs( bx ) - 0.9, 0.0 ), bz ) );
-	let bowBand = outside * nearHull * smoothstep( - 0.5, 1.2, bz ) * smoothstep( 4.2, 3.2, bz );
+	let bowBand = outside * nearHull * smoothstep( - 0.5, 1.2, bz ) * (1.0 - smoothstep(3.2, 4.2, bz ));
 	let bowGen = bowBand * wk.bow * ( wk.speed + 1.0 ) * ( wakeNoise( vec2f( bz * 1.5, time * 3.0 ) ) * 1.4 + 0.1 ) * 0.35;
 
 	// Dissipation is a turbulent eddy viscosity acting on w in flux form: it conserves mass
@@ -554,7 +554,7 @@ fn wakeCell( col: u32, row: u32 ) -> vec4f {
 	let a0 = max( aC + lapA * min( ( turb * 0.35 + 0.07 ) * dt / ( WAKE_CELL * WAKE_CELL ), 0.2 ), 0.0 );
 	// the bubble cloud is wider than the white race and its edge wanders (soft, irregular)
 	let wA = washW * ( wakeNoise( p * 0.22 + time * 0.05 ) * 0.8 + 0.8 );
-	let aerBand = smoothstep( - 0.6, 0.3, behind ) * smoothstep( 9.0, 2.0, behind ) * smoothstep( wA, wA * 0.2, abs( bx ) );
+	let aerBand = smoothstep( - 0.6, 0.3, behind ) * (1.0 - smoothstep(2.0, 9.0, behind )) * (1.0 - smoothstep(wA * 0.2, wA, abs( bx)));
 	let aerGen = ( aerBand * wk.wash * ( wk.speed + 1.5 ) * ( ( race * 1.2 + 0.15 ) * ( patchN * 1.3 + streak * 0.5 + 0.1 ) )
 		* ( mottle * mottle * 0.55 ) + bowGen * 0.6 + brk * 1.5 + surf * 2.0 ) * wk.aerGain;
 	// bubbles rise out over ~25 s, faster in some patches (mottled as it ages)
@@ -724,7 +724,7 @@ ${ stages( 'shRow', [ 0 ], 1 ) }
 		let h1 = sc.x + w1 * dt;
 		let cl = f32( ( i32( col ) - i32( wk.origin.x ) ) & i32( WAKE_MASK ) ) + 0.5;
 		let edge = min( min( cl, f32( WAKE_N ) - cl ), ez );
-		let sig = smoothstep( ${ f( SPONGE ) }, 0.0, edge );
+		let sig = (1.0 - smoothstep(0.0, ${f(SPONGE)}, edge));
 		let k = exp( dt * ( sig * sig * - 6.0 ) );
 		wakeState[ idx ] = vec4f( h1 * k, w1 * k, sc.z, sc.w );
 		wakeAerA[ idx ] = wakeAerB[ idx ];

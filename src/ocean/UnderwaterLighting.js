@@ -47,8 +47,10 @@ export function installUnderwaterLighting( { fft, caustics, clouds = null, terra
 
 	const T = !! terrain;
 	const S = !! ( shore && terrain );
+	// bake kernel (underwaterLongWaves/MeanLevel + causticsDetailK) never touches clouds: drop it
+	// here to save 1-3 sampled textures on 16-texture adapters (17>16). Hooks keep clouds via hookDeps.
 	const deps = [ commonModule, surfaceModule, fft.module, terrain && terrain.module, S && shore.module, shoreSim && shoreSim.module,
-		caustics && caustics.module, clouds && clouds.module, surface && surface.attenuationModule ];
+		caustics && caustics.module, surface && surface.attenuationModule ];
 
 	const C3 = Math.min( 3, fft.cascades ), C2 = Math.min( 2, fft.cascades );
 
@@ -87,7 +89,7 @@ ${ S ? `	{
 	}` : '' }
 ${ shoreSim ? '	foam += shoreSimSample( xz ).x * 0.8;' : '' }
 	// waves only exist over water: none over dry land
-${ T ? '	h = h * smoothstep( 0.0, 1.0, seaDepth ) - smoothstep( 0.0, -0.4, seaDepth ) * 10.0;' : '' }
+${ T ? '	h = h * smoothstep( 0.0, 1.0, seaDepth ) - (1.0 - smoothstep(-0.4, 0.0, seaDepth )) * 10.0;' : '' }
 	var o: UnderwaterLongWaves;
 	o.height = frame.seaLevel + h;
 	o.slope = slope;
@@ -209,8 +211,10 @@ fn _uwMapLookup( xz: vec2f, waves: bool ) -> UwMapSample {
 
 	};
 
-	// the hooks bind only the maps (+ caustics, clouds, terrain hill shadow)
-	const hookDeps = [ commonModule, surfaceModule, mapModule, caustics && caustics.module, clouds && clouds.module, terrain && terrain.module ].filter( Boolean );
+	// the hooks bind only the maps (+ caustics, clouds shadow, terrain hill shadow). Hooks call
+	// cloudsShadow() only, so use shadowModule (1 texture, see Clouds.js) not the full module
+	// (panorama+view) to save 1-2 sampled textures on 16-texture adapters (Terrain 17>16).
+	const hookDeps = [ commonModule, surfaceModule, mapModule, caustics && caustics.module, clouds && ( clouds.shadowModule || clouds.module ), terrain && terrain.module ].filter( Boolean );
 
 	const direct = new ShaderModule( {
 		name: 'hook-directModulation-underwater',

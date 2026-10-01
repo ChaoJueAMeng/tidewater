@@ -489,7 +489,7 @@ fn cloudsBase( p: vec3f, w: vec2f ) -> vec4f {
 // three detail octaves per fetch; s: size (m) of the coarsest features
 fn cloudsOctaves( uvw: vec3f, s: f32, foot: f32 ) -> f32 {
 	let d = textureSampleLevel( cloudsDetailTex, smpLinearRepeat, uvw, 0.0 ).xyz;
-	let w = vec3f( smoothstep( s * 0.24, s * 0.09, foot ), smoothstep( s * 0.12, s * 0.045, foot ), smoothstep( s * 0.06, s * 0.0225, foot ) );
+	let w = vec3f((1.0 - smoothstep(s * 0.09, s * 0.24, foot)), (1.0 - smoothstep(s * 0.045, s * 0.12, foot)), (1.0 - smoothstep(s * 0.0225, s * 0.06, foot)));
 	return dot( mix( vec3f( CL_D_MEAN ), d, w ), vec3f( 0.56, 0.32, 0.12 ) );
 }
 
@@ -674,7 +674,7 @@ fn cloudsShadow( worldXZ: vec2f ) -> f32 {
 	let s = mix( mix( cloudsShadowTap( i0 ), cloudsShadowTap( i0 + vec2i( 1, 0 ) ), fr.x ), mix( cloudsShadowTap( i0 + vec2i( 0, 1 ) ), cloudsShadowTap( i0 + vec2i( 1, 1 ) ), fr.x ), fr.y );
 	// no data outside the map: fade to unshadowed at its border
 	let e = abs( uv - 0.5 );
-	let inside = smoothstep( 0.5, 0.42, max( e.x, e.y ) );
+	let inside = (1.0 - smoothstep(0.42, 0.5, max( e.x, e.y ) ));
 	return mix( 1.0, s, cloudsParams.shadowStrength * inside );
 }
 `,

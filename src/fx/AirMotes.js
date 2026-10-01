@@ -1,4 +1,5 @@
 import { Material } from '../engine/render/Material.js';
+import { shadowModule } from '../engine/render/wgsl/lighting.js';
 import { Mesh } from '../engine/scene/Mesh.js';
 import { PlaneGeometry } from '../engine/geometry/index.js';
 import { ShaderModule, UniformBlock } from '../engine/gpu/Shader.js';
@@ -63,9 +64,11 @@ fn airPhaseHG( cosT: f32, g: f32 ) -> f32 { return ( ( 1.0 - g * g ) / ( 4.0 * P
 		const B = f( box );
 		const NG = GNAT_SWARMS * GNATS_PER_SWARM;
 
+		// sunShadowCascadeHard lives in the engine shadow module (previously pulled via lighting hooks;
+		// unlit color passes skip hooks now, so include it explicitly).
 		const mat = new Material( {
 			name: 'AirMotes',
-			modules: [ params, hasTerrain && terrain.module, hasClouds && ( clouds.shadowModule || clouds.module ) ].filter( Boolean ),
+			modules: [ params, shadowModule, hasTerrain && terrain.module, hasClouds && ( clouds.shadowModule || clouds.module ) ].filter( Boolean ),
 			lit: false,
 			transparent: true,
 			// the core of each speck writes depth: the temporal resolve dilates its motion vectors by depth,
@@ -138,7 +141,7 @@ fn airPhaseHG( cosT: f32, g: f32 ) -> f32 { return ( ( 1.0 - g * g ) / ( 4.0 * P
 	let keep = sat( ( density - select( h3.y, 0.5, isGnat ) ) * 8.0 );
 
 	// ---- what: salt aerosol near the surf / over the sea, dust and pollen over the land
-	let salt = smoothstep( 0.8, -0.5, hA );
+	let salt = (1.0 - smoothstep(-0.5, 0.8, hA ));
 	// (the size of what catches the eye in film: lint, pollen clumps, bits of plant, sea salt crystals)
 	let rMote = mix( 0.00015, 0.0005, h2.x * h2.x ) * mix( 1.0, 0.6, salt ) * select( 1.0, 2.2, h2.y > 0.96 );
 	let r = select( select( rMote, mix( 0.0025, 0.0045, h2.x ), isSeed ), mix( 0.0008, 0.0011, h2.x ), isGnat );
@@ -173,8 +176,8 @@ ${ hasTerrain ? '\tvis *= terrainSunShadowAt( p );' : '' }
 	let rs = r / size;
 	let cover = min( rs * rs * ${ f( 3.5 * VISIBILITY ) }, 1.0 );
 	// fades: box edges (before the wrap), right in front of the lens, near the water surface
-	let edge = smoothstep( Bx * 0.5, Bx * 0.36, max( abs( p.x - air.camPos.x ), abs( p.z - air.camPos.z ) ) );
-	let fade = edge * smoothstep( Bx * 0.5, Bx * 0.3, dist ) * smoothstep( 0.12, 0.5, dist ) * smoothstep( 0.25, 0.9, p.y - frame.seaLevel );
+	let edge = (1.0 - smoothstep(Bx * 0.36, Bx * 0.5, max(abs(p.x - air.camPos.x), abs(p.z - air.camPos.z))));
+	let fade = edge * (1.0 - smoothstep(Bx * 0.3, Bx * 0.5, dist)) * smoothstep(0.12, 0.5, dist) * smoothstep(0.25, 0.9, p.y - frame.seaLevel);
 	let a = cover * fade * keep * air.intensity;
 
 	// camera-facing quad

@@ -1,4 +1,5 @@
 import { ComputeKernel } from '../engine/webgpu.js';
+import { GPU } from '../engine/gpu/GPU.js';
 
 // Box-filtered mip chain of a square power-of-two 2d / 2d-array / cube texture in two compute
 // dispatches, instead of a render pass per level and layer (generateMipmaps):
@@ -17,9 +18,42 @@ export class ComputeMips {
 		this.res = res;
 		this.layers = tex.dimension === '3d' ? 1 : tex.depth;
 		const levels = tex.mipLevelCount;
-		const top = Math.min( 5, levels - 1 );
 		const out = ( l ) => ( { storageTexture: tex, access: 'write', view: { dimension: '2d-array', baseMipLevel: l, mipLevelCount: 1 } } );
 		const src = ( l ) => ( { texture: tex, view: { dimension: '2d-array', baseMipLevel: l, mipLevelCount: 1 } } );
+		const maxST = GPU.limits?.maxStorageTexturesPerShaderStage ?? 8;
+		// Low-limit adapters (e.g. 4 storage textures per stage): one level per dispatch
+		// (1 sampled + 1 storage, always fits) instead of the 5-output fast path.
+		if ( Math.min( 5, levels - 1 ) > maxST ) {
+
+			this.kernelA = null;
+			this.kernelB = null;
+			this.levelKernels = [];
+			for ( let l = 1; l < levels; l ++ ) {
+
+				const w = res >> l;
+				if ( w < 1 ) break;
+				const kernel = new ComputeKernel( {
+					label: label + ' mips ' + l,
+					bindings: { src: src( l - 1 ), dst: out( l ) },
+					workgroupSize: [ 8, 8, 1 ],
+					code: /* wgsl */`
+@compute @workgroup_size( WG_X, WG_Y, WG_Z )
+fn main( @builtin( global_invocation_id ) gid: vec3u ) {
+	if ( gid.x >= ${ w }u || gid.y >= ${ w }u ) { return; }
+	let layer = gid.z;
+	let p = vec2u( gid.xy ) * 2u;
+	let v = ( textureLoad( src, p, layer, 0 ) + textureLoad( src, p + vec2u( 1u, 0u ), layer, 0 ) + textureLoad( src, p + vec2u( 0u, 1u ), layer, 0 ) + textureLoad( src, p + vec2u( 1u, 1u ), layer, 0 ) ) * 0.25;
+	textureStore( dst, vec2u( gid.xy ), layer, v );
+}`,
+				} );
+				this.levelKernels.push( { kernel, w } );
+
+			}
+			return;
+
+		}
+		this.levelKernels = null;
+		const top = Math.min( 5, levels - 1 );
 		// threads (lx, ly) < width reduce 2x2 of `from` (row 2 * width) into level lvl (and `to`)
 		const reduce = ( from, to, width, lvl ) => /* wgsl */`
 	if ( lx < ${ width }u && ly < ${ width }u ) {
@@ -99,6 +133,12 @@ ${ codeB }
 	dispatch( pass = null ) {
 
 		const o = pass ? { pass } : undefined;
+		if ( this.levelKernels ) {
+
+			for ( const { kernel, w } of this.levelKernels ) kernel.dispatch( [ Math.ceil( w / 8 ), Math.ceil( w / 8 ), this.layers ], o );
+			return;
+
+		}
 		this.kernelA.dispatch( [ this.res / 32, this.res / 32, this.layers ], o );
 		if ( this.kernelB ) this.kernelB.dispatch( [ 1, 1, this.layers ], o );
 

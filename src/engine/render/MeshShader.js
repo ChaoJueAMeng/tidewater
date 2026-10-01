@@ -368,10 +368,13 @@ struct FragOut {
 		.replace( /\bVELOCITY_WEIGHT\b/g, fmt( material.velocityWeight ) )
 		.replace( /\bREFRACTION_CLIP_MARGIN\b/g, fmt( ( pass.defines && pass.defines.REFRACTION_CLIP_MARGIN ) ?? 0 ) );
 
-	// modules: lighting (with the installed hooks) for colour passes, or whenever a material module needs it
+	// modules: lighting (with the installed hooks) for lit colour passes, or whenever a material module needs it.
+	// Unlit color passes (hullMask: 19 sampled >16) must not pull every scene hook (underwater, bounce,
+	// local lights, env, shadows) whose bindings count toward per-stage limits even though the
+	// fragment never calls them (LIT=0 takes albedo+emissive only).
 	let modules = [ commonModule, surfaceModule, ...material.modules ];
-	const needsLighting = kind !== 'depth' || collectModules( material.modules ).includes( lightingModule );
-	if ( needsLighting ) modules = [ commonModule, surfaceModule, ...hookModules(), lightingModule, ...material.modules ];
+	const needsLighting = ( kind !== 'depth' && material.lit !== false ) || collectModules( material.modules ).includes( lightingModule );
+	if ( needsLighting ) modules = [ commonModule, surfaceModule, ...hookModules( material.noEnv ? [ 'envSpecular' ] : [] ), lightingModule, ...material.modules ];
 	// custom-shaded materials (the water) that only need sunShadow(): no scene lighting hooks, whose
 	// modules would add their uniform buffers / textures to the pipeline (12 uniform buffers per stage)
 	if ( material.lightingHooks === false && ! collectModules( material.modules ).includes( lightingModule ) ) modules = [ commonModule, surfaceModule, shadowModule, ...material.modules ];

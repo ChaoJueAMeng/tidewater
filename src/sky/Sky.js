@@ -87,7 +87,7 @@ fn skySunDisk( dir: vec3f ) -> vec3f {
 	let cosA = dot( dir, atmosphereParams.sunDir ); // the real sun (frame.sunDir is the moon at night)
 	let ang = acos( clamp( cosA, -1.0, 1.0 ) );
 	let r = ang / ${ f( SUN_ANGULAR_RADIUS ) };
-	let mask = smoothstep( 1.0, 0.9, r );
+	let mask = (1.0 - smoothstep(0.9, 1.0, r ));
 	let mu = sqrt( max( 1.0 - r * r, 0.0 ) );
 	let limb = 1.0 - 0.6 * ( 1.0 - mu );
 	let T = atmosphereTransmittanceToSpace( dir );
@@ -139,7 +139,7 @@ fn skyMoon( dir: vec3f ) -> vec3f {
 	let cosA = dot( dir, skyParams.moonDir );
 	let ang = acos( clamp( cosA, -1.0, 1.0 ) );
 	let r = ang / 0.0048;
-	let mask = smoothstep( 1.0, 0.92, r );
+	let mask = (1.0 - smoothstep(0.92, 1.0, r ));
 	return vec3f( 0.9, 0.92, 1.0 ) * mask * 3.0 * skyParams.starIntensity * smoothstep( -0.02, 0.02, dir.y );
 }
 

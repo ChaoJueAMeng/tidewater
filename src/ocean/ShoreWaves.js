@@ -75,7 +75,7 @@ fn ${ name }( xz: vec2f, depth: f32, groundH: f32 ) -> ShoreSample {
 	let dB = shoreBreakDepth( xz, dir, u, lam, d );
 
 	// offshore fade-in (FFT covers deep water) and fade on land (the swash sheet takes over there)
-	let env = smoothstep( 26.0, 13.0, d ) * smoothstep( -0.25, 0.05, d ) * sat( exposure * 1.4 ) * shoreP.enabled;
+	let env = (1.0 - smoothstep(13.0, 26.0, d )) * smoothstep( -0.25, 0.05, d ) * sat( exposure * 1.4 ) * shoreP.enabled;
 
 	// finite difference along the propagation direction for the normal
 	let e = 0.15;
@@ -142,8 +142,8 @@ ${ mode === 'normal' ? `	{
 	let thick = clamp( min( fm * 0.3, max( fm - 0.1, 0.0 ) * ( SHORE_BEACH_SLOPE * 0.22 ) + 0.03 ), -0.1, 0.12 );
 	let swashLevel = groundH + thick;
 	// bubbly foam line riding the leading edge all the way up (left behind as the swash mark)
-	let uprush = smoothstep( 0.46, 0.32, swr.tau );
-	let edge = smoothstep( 0.8, 0.0, front ) * smoothstep( -0.05, 0.05, front ) * uprush * smoothstep( 0.0, 1.0, swr.Rt );
+	let uprush = (1.0 - smoothstep(0.32, 0.46, swr.tau ));
+	let edge = (1.0 - smoothstep(0.0, 0.8, front )) * smoothstep( -0.05, 0.05, front ) * uprush * smoothstep( 0.0, 1.0, swr.Rt );
 	let swashFoam = edge * 0.9;
 
 	// ---- depth-averaged water velocity (along dir), for foam advection
@@ -153,7 +153,7 @@ ${ mode === 'normal' ? `	{
 	let uWave = clamp( c * eta / ( max( d, 0.0 ) + max( eta, d * -0.8 ) + 0.15 ), -2.5, 4.0 );
 	let rel = sat( swr.inland / max( swr.Rt, 0.5 ) );
 	let uSwash = dRdt * select( ( 1.0 - rel ) * 0.6 + 0.9, clamp( ( swr.inland + 3.0 ) / ( swr.Rt + 3.0 ), 0.15, 1.0 ), swr.isUp );
-	let wSwash = smoothstep( 0.3, 0.05, d );
+	let wSwash = (1.0 - smoothstep(0.05, 0.3, d ));
 	let uFlow = mix( uWave, uSwash, wSwash ) * select( 0.0, 1.0, covered || d > 0.02 );
 
 	var o: ShoreSample;
@@ -365,7 +365,7 @@ fn shoreWhitewater( xi: f32, lam: f32, P: ShoreBreak ) -> f32 {
 	let landed = smoothstep( 0.86, 0.99, P.b );
 	let spread = sat( ( P.b - 0.9 ) / 0.45 );
 	let reach = P.Xi * 0.25 + spread * ( P.Xi * 0.9 + 1.0 ); // radius around the plunge point
-	let impact = landed * smoothstep( reach, reach * 0.6, abs( xi - P.Xi ) ) * ( 1.0 - smoothstep( 1.4, 1.9, P.b ) );
+	let impact = landed * (1.0 - smoothstep(reach * 0.6, reach, abs(xi - P.Xi))) * (1.0 - smoothstep(1.4, 1.9, P.b));
 	let toe = P.Xc + P.Wt;
 	// the collapsing tube turns white from its foot (next to the plunge point) up to the crest
 	let faceFill = shoreFaceFill( P.b, sat( ( xi - P.Xc ) / max( P.Wt, 0.05 ) ) );
@@ -402,7 +402,7 @@ fn shoreProfile( u: f32, lam: f32, P: ShoreBreak, withFoam: bool ) -> ShoreProfi
 	let yFront = select( P.ytB, P.ytB + ( P.ycB - P.ytB ) * fy, inFace );
 	let cb = pow( max( ( cos( u * ( SHORE_TAU * 0.85 ) ) + 1.0 ) * 0.5, 0.0 ), P.p );
 	let yBack = P.ytB + ( P.ycB - P.ytB ) * mix( cb, exp( u * -7.0 ), P.wBore );
-	let xBack = P.Xc * exp( u * -6.0 ) * smoothstep( 0.5, 0.35, u ) + xPre * ( 1.0 - P.wBore );
+	let xBack = P.Xc * exp( u * -6.0 ) * (1.0 - smoothstep(0.35, 0.5, u )) + xPre * ( 1.0 - P.wBore );
 	let front = u < 0.0;
 	let wC = smoothstep( -0.35, 0.25, P.b ) * shoreP.curl;
 	var r: ShoreProfile;
@@ -499,7 +499,7 @@ fn shoreSurfMedium( xz: vec2f, depth: f32 ) -> ShoreMedium {
 	if ( depth < 4.5 && depth > -0.2 ) {
 		var expo: f32;
 		if ( shoreP.dirOn > 0.5 ) { expo = shoreDirAt( xz ).z; } else { expo = sat( length( terrainShoreSample( xz ).yz ) * 1.4 ); }
-		k = smoothstep( 4.5, 1.2, depth ) * smoothstep( -0.2, 0.15, depth ) * expo * shoreP.turbidity * shoreP.enabled;
+		k = (1.0 - smoothstep(1.2, 4.5, depth )) * smoothstep( -0.2, 0.15, depth ) * expo * shoreP.turbidity * shoreP.enabled;
 	}
 	return ShoreMedium( vec3f( 0.9, 1.0, 0.85 ) * k, vec3f( 0.1, 0.2, 0.62 ) * k );
 }
@@ -530,7 +530,7 @@ fn shoreCrestPath( p: vec2f, d: f32, T: vec3f ) -> f32 {
 	if ( d >= 6.0 || shoreP.enabled <= 0.0 ) { return out; } // (before the phase lookup)
 	let ph = shorePhaseAt( p );
 	let tXi = dot( T.xz, ph.dir ); // shoreward component of the ray
-	let env = smoothstep( 26.0, 13.0, d ) * sat( ph.exposure * 1.4 ) * shoreP.enabled;
+	let env = (1.0 - smoothstep(13.0, 26.0, d )) * sat( ph.exposure * 1.4 ) * shoreP.enabled;
 	// rays heading out through the back of the wave (a view from the beach side), near breakers
 	if ( env > 0.05 && tXi < -0.05 && d < 6.0 ) {
 		let lam = sqrt( clamp( d, 0.3, 25.0 ) * SHORE_GRAVITY ) * shoreP.period;
@@ -611,7 +611,7 @@ fn shoreSwashEdge( p: vec2f, t: f32 ) -> vec4f {
 			// of the backwash (it stopped at sea level: a strip in between with a straight edge across the
 			// draining water), and fades in from there and from 0.3 m of film instead of switching on.
 			// The front distance is divided by the weight so the effects at the front recede with it.
-			let w = smoothstep( frame.seaLevel - 0.8, frame.seaLevel - 0.4, g ) * smoothstep( 0.3, 0.15, t );
+			let w = smoothstep( frame.seaLevel - 0.8, frame.seaLevel - 0.4, g ) * (1.0 - smoothstep(0.15, 0.3, t ));
 			if ( w > 0.0 ) {
 				out = vec4f( mix( t, min( t, front * 0.08 ), w ), front / max( w, 1e-3 ), r.tau, r.Rt * w );
 			}
