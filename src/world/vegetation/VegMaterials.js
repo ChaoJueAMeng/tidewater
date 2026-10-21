@@ -16,6 +16,13 @@ import { vegModule, vegParams, LOD_BAND, C, f } from './VegNodes.js';
 //    colour).
 //  - attributes read in the fragment stage travel as varyings (vMat, vIDat, vIPos ...).
 
+// Plants sway in the wind while their motion vectors carry only the camera (instancing: tracking
+// the previous frame's matrices would exceed the vertex buffer limit, see CameraVelocity.js), so
+// with the camera still the temporal upscaler would hold their moving pixels' history (ghost
+// trails). Every wind-animated material flags its pixels in the scene mask's b channel (the water
+// owns g); TemporalUpscale keeps no history on them.
+export const VEG_TAAL_MASK_OUTPUT = 'r.mask = vec4f( 0.0, 0.0, 1.0, 1.0 );';
+
 // Coconut palm bark: irregular leaf-scar rings (uneven spacing, closer below the crown, wavy,
 // partial), fine vertical fissures, grey-brown to silver weathering, lichen, dark stains and the
 // root mass at the base, the fibrous old frond bases under the crown. Returns the albedo and a
@@ -502,6 +509,7 @@ export function createPlantLeafMaterial() {
 	s.specularIntensity = select( select( 0.4, 0.3, isStem ), 0.42, isBroad );
 	s.translucency = vec3f( 0.0 );
 	if ( isLeaf ) { s.translucency = vegTranslucency( albedo, in.N, select( 0.3, 0.2, isBroad ), in.P ); }`,
+		output: VEG_TAAL_MASK_OUTPUT,
 		shadow: 'return vegPlantMask( in );',
 	} );
 	return mat;
@@ -719,6 +727,7 @@ export function createCanopyMaterial( leafAtlas ) {
 	s.normal = select( normalize( geoN + in.V * 0.7 ), in.N, isBark );
 	s.translucency = vec3f( 0.0 );
 	if ( ! isBark ) { s.translucency = vegTranslucency( albedo, geoN, 0.5, in.P ) * ( ao * 0.6 + 0.4 ); }`,
+		output: VEG_TAAL_MASK_OUTPUT,
 		shadow: 'return vegCanopyMask( in, vegCanopyLeaf( in ) );',
 	} );
 	return mat;

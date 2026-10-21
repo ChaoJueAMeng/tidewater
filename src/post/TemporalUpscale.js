@@ -36,7 +36,9 @@ const CLR = [ 0, 0, 0, 0 ];
 // PostFX.beginFrame() takes jitter() for the frame's camera (setFrameCamera) and endFrame() calls
 // clearViewOffset() to advance it. The history is ping-ponged (the resolve writes the other target).
 // Inputs: beauty (internal res, getter), the scene's reversed-Z depth, velocity (uv motion, current -
-// previous, y down: history uv = uv - velocity), water mask (g = 1 on water surface pixels), the
+// previous, y down: history uv = uv - velocity), water mask (g = 1 on water surface pixels) and veg
+// mask (b = 1 on wind-animated plants; their velocity carries only the camera, so no history is kept
+// on them: locks, luma instability and the still-camera keep would smear the sway into trails), the
 // exposure (a storage buffer, times frame.exposure: FSR2's thresholds are in display-referred units).
 
 function halton( index, base ) {
@@ -341,7 +343,10 @@ struct TaauOut { @location( 0 ) color: vec4f, @location( 1 ) lock: vec4f, @locat
 	let isDisocclusion = closestDepth - taauPreviousDepth( historyUV ) > taau.depthThreshold;
 	// the water surface keeps its history (its depth changes with the waves, not with occlusion)
 	let ms = vec2i( textureDimensions( taauMask ) );
-	let isWater = taau.hasWaterMask > 0.5 && textureLoad( taauMask, clamp( closestTap, vec2i( 0 ), ms - 1 ), 0 ).g > 0.5;
+	let sceneMask = textureLoad( taauMask, clamp( closestTap, vec2i( 0 ), ms - 1 ), 0 );
+	let isWater = taau.hasWaterMask > 0.5 && sceneMask.g > 0.5;
+	// wind-animated plants move while their velocity says still: no history keeping on them
+	let isVeg = taau.hasWaterMask > 0.5 && sceneMask.b > 0.5;
 	let isExistingSample = taauInside( historyUV );
 	let depthClip = select( 0.0, 1.0, isDisocclusion && ! isEdge && ! isWater );
 	let isNewSample = ! isExistingSample || taau.reset > 0.5;
@@ -482,7 +487,7 @@ struct TaauOut { @location( 0 ) color: vec4f, @location( 1 ) lock: vec4f, @locat
 		// lighting changed. A real change (a shadow moving in) leaves the local luma away from all of
 		// the last 4 frames'; the jitter brings it back to one of them. Such pixels keep their history.
 		let dAll = min( min( abs( curLuma - lumaHist.x ), abs( curLuma - lumaHist.y ) ), min( abs( curLuma - lumaHist.z ), abs( curLuma - lumaHist.w ) ) );
-		staticKeep = taau.staticKeep * select( 0.0, 1.0, hrVelocity < 0.05 && lumaHist.w != 0.0 && ! isWater ) * sat( 1.0 - ( dAll - 0.01 ) / 0.03 );
+		staticKeep = taau.staticKeep * select( 0.0, 1.0, hrVelocity < 0.05 && lumaHist.w != 0.0 && ! isWater && ! isVeg ) * sat( 1.0 - ( dAll - 0.01 ) / 0.03 );
 		lumaHist = vec4f( curLuma, lumaHist.xyz );
 	}
 
@@ -490,6 +495,11 @@ struct TaauOut { @location( 0 ) color: vec4f, @location( 1 ) lock: vec4f, @locat
 	var accumulation = taau.maxAccumulation * select( 0.0, 1.0, isExistingSample ) * ( 1.0 - thisFrameReactive ) * ( 1.0 - depthClip );
 	accumulation = min( accumulation, mix( accumulation, upsampledWeight * taau.motionAccumulation, max( select( 0.0, 1.0, inMotionLastFrame ), sat( hrVelocity * 10.0 ) ) ) );
 	accumulation = min( accumulation, mix( accumulation, upsampledWeight, sat( hrVelocity / 20.0 ) ) );
+	// wind-animated plants: their velocity carries only the camera, and their own past colours stay
+	// in the 3x3 neighbourhood, so the box never rejects the history and a plain accumulate smears
+	// the sway into a many-pixel trail; cap the history so the new frame dominates (FSR2's reactive
+	// mask does the same for materials without motion vectors)
+	accumulation = min( accumulation, upsampledWeight * select( 1.0, 0.3, isVeg ) );
 
 	// Resampling blur (not in FSR2): even the Catmull-Rom loses fine detail when it samples between
 	// texels, and in motion the history is resampled that way every frame (at 0.2 px ~80% of the
@@ -519,8 +529,9 @@ struct TaauOut { @location( 0 ) color: vec4f, @location( 1 ) lock: vec4f, @locat
 		let boxMax = min( aabbMax, boxCenter + boxVec * boxScale );
 		if ( any( boxMin > historyColor ) || any( historyColor > boxMax ) ) {
 			let clamped = clamp( historyColor, boxMin, boxMax );
-			// (not on the water: its glints move on their own and would leave trails)
-			let contribution = select( sat( max( max( lumaInstability, lockContribution ), staticKeep ) ), 0.0, isWater );
+			// (not on the water: its glints move on their own and would leave trails; not on the
+			// plants: they sway, and every keeper above is a trail on them)
+			let contribution = select( sat( max( max( lumaInstability, lockContribution ), staticKeep ) ), 0.0, isWater || isVeg );
 			dbgClamp = vec2f( length( clamped - historyColor ) / max( boxVec.x * 2.0, 0.02 ), contribution );
 			historyColor = mix( clamped, historyColor, contribution );
 			accumulation = mix( min( accumulation, 0.1 ), accumulation, contribution );
