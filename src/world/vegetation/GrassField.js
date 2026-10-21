@@ -4,6 +4,7 @@ import { ShaderModule } from '../../engine/gpu/Shader.js';
 import { Material } from '../../engine/render/Material.js';
 import { mulberry32 } from '../../util/Noise.js';
 import { vegModule, uCamPos, C, f } from './VegNodes.js';
+import { VEG_TAAL_MASK_OUTPUT } from './VegMaterials.js';
 
 // Camera-following ground flora: tall meadow grass (knee to waist high), dune grass, sea oats and
 // beach creeper.
@@ -873,6 +874,7 @@ function createGrassMaterial( field ) {
 	let back = pow( sat( dot( - in.V, frame.sunDir ) ), 4.0 );
 	s.translucency = albedo * vec3f( 1.1, 1.3, 0.6 ) * ( back * 0.3 * smoothstep( 0.2, 1.0, hf ) ) * ( 1.0 - frame.night );
 `,
+		output: VEG_TAAL_MASK_OUTPUT,
 	} );
 	return mat;
 

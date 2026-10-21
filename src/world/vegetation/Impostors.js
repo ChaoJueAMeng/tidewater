@@ -5,7 +5,7 @@ import { Material } from '../../engine/render/Material.js';
 import { MeshRenderer } from '../../engine/render/MeshRenderer.js';
 import { createViewUniforms, setFrameCamera } from '../../engine/render/Frame.js';
 import { vegModule, f } from './VegNodes.js';
-import { canopyModule } from './VegMaterials.js';
+import { canopyModule, VEG_TAAL_MASK_OUTPUT } from './VegMaterials.js';
 
 // Octahedral impostors for the broadleaf trees and shrubs.
 //
@@ -301,6 +301,7 @@ ${ common }
 	s.specularIntensity = 0.12;
 	// backlit crowns glow at the edges (light through the leaves), like the near canopy
 	s.translucency = vegTranslucency( albedo, in.N, 0.35, in.P );`,
+			output: VEG_TAAL_MASK_OUTPUT,
 		} );
 
 		// frame sampler: the frame's direction, the view ray re-projected on its plane
